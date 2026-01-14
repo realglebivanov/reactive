@@ -11,41 +11,57 @@ https://tsoding.github.io/grecha.js/example.html
 ```html
 <!DOCTYPE html>
 <html>
-  <head><title>Grecha.js</title></head>
-  <body>
-    <div id="entry"></div>
-    <script src="./grecha.js"></script>
-    <script>
-      const kasha = img("Kasha.png");
-      const kashaHard = img("KashaHard.gif");
 
-      let count = 0;
-      let hard = false;
-      const r = router({
-        "/": () => div(
-          h1("Grecha.js"),
-          div(a("Foo").att$("href", "#/foo")),
-          div(a("Bar").att$("href", "#/bar")),
-          div("Counter: "+count),
-          div(hard ? kashaHard : kasha).onclick$(function () {
-            count += 1;
-            hard = !hard
-            r.refresh();
-          }),
+<head>
+  <title>Grecha.js</title>
+</head>
+
+<body>
+  <div id="entry"></div>
+  <script src="./grecha.js"></script>
+  <script>
+    const count$ = observable(0);
+    const hard$ = observable(false);
+    const veryHard$ = observable(true);
+
+    const onClick = function () {
+      count$.updateValue((count) => count + 1);
+      hard$.updateValue((hard) => !hard);
+    };
+
+    const r = router({
+      "/": div(
+        h1("Grecha.js"),
+        div(a("Foo").att$("href", "#/foo")),
+        div(a("Bar").att$("href", "#/bar")),
+        div(
+          h2(cond({
+            if$: joinObservable((hard, veryHard) => hard & veryHard, hard$, veryHard$),
+            then: "Rock hard, baby",
+            otherwise: "Wood needed"
+          })),
+          span(template((count) => `Counter: ${count}`, count$))
         ),
-        "/foo": () => div(
-          h1("Foo"),
-          p(LOREM),
-          div(a("Home").att$("href", "#")),
-        ),
-        "/bar": () => div(
-          h1("Bar"),
-          p(LOREM),
-          div(a("Home").att$("href", "#"))
-        )
-      });
-      entry.appendChild(r);
-    </script>
-  </body>
+        cond({
+          if$: hard$,
+          then: img("KashaHard.gif").onclick$(onClick),
+          otherwise: img("Kasha.png").onclick$(onClick)
+        })
+      ),
+      "/foo": div(
+        h1("Foo"),
+        p(LOREM),
+        div(a("Home").att$("href", "#")),
+      ),
+      "/bar": div(
+        h1("Bar"),
+        p(LOREM),
+        div(a("Home").att$("href", "#"))
+      )
+    });
+    entry.appendChild(r);
+  </script>
+</body>
+
 </html>
 ```
