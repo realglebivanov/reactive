@@ -40,7 +40,7 @@ https://tsoding.github.io/grecha.js/example.html
             then: "Rock hard, baby",
             otherwise: "Wood needed"
           })),
-          span(template((count) => `Counter: ${count}`, count$))
+          span(template('Counter: ?', count$))
         ),
         cond({
           if$: hard$,
@@ -49,12 +49,12 @@ https://tsoding.github.io/grecha.js/example.html
         })
       ),
       "/foo": div(
-        h1("Foo"),
+        h1("Foo").onclick$(onClick),
         p(LOREM),
         div(a("Home").att$("href", "#")),
       ),
       "/bar": div(
-        h1("Bar"),
+        h1("Bar").onclick$(onClick),
         p(LOREM),
         div(a("Home").att$("href", "#"))
       )

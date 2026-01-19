@@ -5,16 +5,29 @@ function observable(value) {
 
     const observers = new Map();
 
+    const notifyObserver = (observer) => {
+        try {
+            observer(internalValue);
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
     const notifyObservers = () => {
         for (const [_, observer] of observers.entries()) {
-            observer(internalValue);
+            notifyObserver(observer);
         }
     };
 
     return {
         getValue: () => internalValue,
+        unsubscribeAll: () => observers.clear(),
         unsubscribe: (id) => observers.delete(id),
         subscribe: (id, observer) => observers.set(id, observer),
+        subscribeInit: function (id, observer) {
+            this.subscribe(id, observer);
+            notifyObserver(observer);
+        },
         updateValue: (fn) => {
             internalValue = fn(internalValue);
             notifyObservers();
@@ -24,30 +37,35 @@ function observable(value) {
 
 function joinObservable(joinFn, ...observables) {
     const id = Symbol('JoinObservable');
-    const getValue = () => joinFn.apply(
-        undefined,
-        observables.map((observable) => observable.getValue()));
+    const currentValues = observables.map((observable) => observable.getValue());
 
-    const joinObservable = observable(getValue());
-    const notifyObservers = (_) => joinObservable.updateValue((_) => getValue());
+    const updateValue = (_) => joinFn.apply(undefined, currentValues);
+    const joinObservable = observable(updateValue(undefined));
 
-    for (const observable of observables) {
-        observable.subscribe(id, notifyObservers);
+    const notifyObservers = (i) => (newValue) => {
+        currentValues[i] = newValue;
+        joinObservable.updateValue(updateValue);
+    };
+
+    for (const [i, observable] of observables.entries()) {
+        observable.subscribe(id, notifyObservers(i));
     }
 
     return joinObservable;
 }
 
-function dedupObservable(observable$, compareEqualFn) {
+function dedupObservable(innerObservable, compareEqualFn, cloneFn) {
+    compareEqualFn = compareEqualFn || ((a, b) => a == b);
+    cloneFn = cloneFn || ((x) => x);
+
+    let currentValue = cloneFn(innerObservable.getValue());
+
     const id = Symbol('DedupObservable');
-    let currentValue = structuredClone(observable$.getValue());
     const dedupObservable = observable(currentValue);
 
-    compareEqualFn = compareEqualFn || ((a, b) => a === b);
-
-    observable$.subscribe(id, (value) => {
+    innerObservable.subscribe(id, (value) => {
         if (!compareEqualFn(currentValue, value)) {
-            currentValue = structuredClone(value);
+            currentValue = cloneFn(value);
             dedupObservable.updateValue((_) => currentValue);
         }
     });
@@ -65,40 +83,78 @@ function cond({ if$, then, otherwise }) {
         otherwise instanceof Node ? otherwise : document.createTextNode(otherwise);
     let currentNode = observable.getValue() ? thenNode : otherwiseNode;
 
-    const updateNode = (parentNode, value) => {
+    const updateNode = (parentNode) => (value) => {
         const node = value ? thenNode : otherwiseNode;
-        parentNode.replaceChild(node, currentNode);
-        currentNode = node;
+
+        try {
+            parentNode.replaceChild(node, currentNode);
+            currentNode = node;
+        } catch (e) {
+            console.error(e);
+        }
     };
 
     return (parentNode) => {
+        const updateNodeFn = updateNode(parentNode);
         parentNode.appendChild(currentNode);
-        observable.subscribe(id, (value) => updateNode(parentNode, value));
+
+        return {
+            activate: () => observable.subscribeInit(id, updateNodeFn),
+            deactivate: () => observable.unsubscribe(id)
+        };
     };
 }
 
-function template(buildText, ...observables) {
-    const id = Symbol('Template');
-    const observable = joinObservable((...values) => values, ...observables);
+function template(template, ...observables) {
+    const staticParts = template.split(/(?<!@)\?/)
+        .map((staticPart) => staticPart.replace('@?', '?'));
 
-    const getText = (values) => buildText.apply(undefined, values);
-    const node = document.createTextNode(getText(observable.getValue()));
+    const nodes = staticParts.map((staticPart, i) => ({
+        observerId: Symbol(`Template${i}`),
+        staticNode: document.createTextNode(staticPart),
+        dynamicNode: i + 1 in staticParts ? document.createTextNode('') : undefined
+    }));
+
+    const updateNode = (node) => (value) => node.data = value;
+
+    const attachObservable = (observable, i) => {
+        const { observerId, dynamicNode } = nodes[i];
+
+        if (observerId !== undefined && dynamicNode !== undefined) {
+            observable.subscribeInit(observerId, updateNode(dynamicNode));
+        }
+    };
+
+    const detachObservable = (observable, i) => {
+        const { observerId } = nodes[i];
+        if (observerId !== undefined) observable.unsubscribe(observerId);
+    };
 
     return (parentNode) => {
-        parentNode.appendChild(node);
-        observable.subscribe(id, (values) => node.data = getText(values));
+        for (const { staticNode, dynamicNode } of nodes) {
+            parentNode.appendChild(staticNode);
+            if (dynamicNode !== undefined) parentNode.appendChild(dynamicNode);
+        }
+
+        return {
+            activate: () => observables.forEach(attachObservable),
+            deactivate: () => observables.forEach(detachObservable)
+        };
     };
 }
 
 function tag(name, ...children) {
     const result = document.createElement(name);
+    const childHandles = [];
+
     for (const child of children) {
         if (typeof (child) === 'string') {
             result.appendChild(document.createTextNode(child));
         } else if (child instanceof Node) {
             result.appendChild(child);
+            childHandles.push(child);
         } else if (typeof (child) === 'function') {
-            child(result);
+            childHandles.push(child(result));
         }
     }
 
@@ -110,6 +166,18 @@ function tag(name, ...children) {
     result.onclick$ = function (callback) {
         this.onclick = callback;
         return this;
+    };
+
+    result.activate = function () {
+        if (this._active) return;
+        this._active = true;
+        for (const handle of childHandles) handle.activate();
+    };
+
+    result.deactivate = function () {
+        if (!this._active) return;
+        this._active = false;
+        for (const handle of childHandles) handle.deactivate();
     };
 
     return result;
@@ -131,6 +199,18 @@ function input(type) {
 function router(routes) {
     let result = div();
 
+    result.enterRoute = function () {
+        for (const child of this.childNodes) {
+            if (typeof (child.activate) === 'function') child.activate();
+        }
+    };
+
+    result.exitRoute = function () {
+        for (const child of this.childNodes) {
+            if (typeof (child.activate) === 'function') child.deactivate();
+        }
+    };
+
     function syncHash() {
         let hashLocation = document.location.hash.split('#')[1];
         if (!hashLocation) {
@@ -145,7 +225,9 @@ function router(routes) {
             hashLocation = route404;
         }
 
+        result.exitRoute();
         result.replaceChildren(routes[hashLocation]);
+        result.enterRoute();
 
         return result;
     };
@@ -154,8 +236,6 @@ function router(routes) {
 
     // TODO(#3): there is way to "destroy" an instance of the router to make it remove it's "hashchange" callback
     window.addEventListener("hashchange", syncHash);
-
-    result.refresh = syncHash;
 
     return result;
 }
