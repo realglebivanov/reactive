@@ -12,6 +12,11 @@
     const count$ = observable(0);
     const hard$ = observable(false);
     const veryHard$ = observable(true);
+    const shoppingItems$ = observable([
+      { name: "milk", price$: observable("1.99") },
+      { name: "sour cream", price$: observable("2.99") },
+      { name: "cheese", price$: observable("0.99") }
+    ]);
 
     const onClick = function () {
       count$.updateValue((count) => count + 1);
@@ -21,33 +26,65 @@
     const r = router({
       "/": div(
         h1("Grecha.js"),
-        div(a("Foo").att$("href", "#/foo")),
-        div(a("Bar").att$("href", "#/bar")),
+        div(a("Foo").att("href", "#/foo")),
+        div(a("Bar").att("href", "#/bar")),
         div(
           h2(cond({
-            if$: joinObservable((hard, veryHard) => hard & veryHard, hard$, veryHard$),
+            if$: mapObservable((hard, veryHard) => hard & veryHard, hard$, veryHard$),
             then: "Rock hard, baby",
             otherwise: "Wood needed"
           })),
-          span(template('Counter: ?', count$))
-        ),
-        cond({
-          if$: hard$,
-          then: img("KashaHard.gif").onclick$(onClick),
-          otherwise: img("Kasha.png").onclick$(onClick)
-        })
+          div(span(template('Counter: ?', count$))),
+          cond({
+            if$: hard$,
+            then: img("KashaHard.gif").onclick(onClick),
+            otherwise: img("Kasha.png").onclick(onClick)
+          }),
+          h2("Shopping items"),
+          ul(
+            iterable({
+              it$: shoppingItems$,
+              buildFn: (item) => li(span(template(`${item.name} - $?`, item.price$))),
+              keyFn: (item) => item.name,
+            })
+          ),
+          div(
+            div(span('Name: '), input('text').att('id', 'itemName')),
+            div(span('Price: '), input('text').att('id', 'itemPrice')),
+            button(span('Add')).onclick(() => {
+              shoppingItems$.updateValue((items) => {
+                items.push({
+                  name: itemName.value,
+                  price$: observable(itemPrice.value)
+                });
+                return items;
+              });
+
+              itemName.value = "";
+              itemPrice.value = "";
+            })
+          )
+        )
       ),
       "/foo": div(
-        h1("Foo").onclick$(onClick),
-        p(LOREM),
-        div(a("Home").att$("href", "#")),
+        h1("Foo"),
+        p(LOREM).att$("style", mapObservable((count) => `color: ${numberToHexColor(count * 100000)}`, count$)),
+        button("Increment counter").onclick(onClick),
+        div(a("Home").att("href", "#")),
       ),
       "/bar": div(
-        h1("Bar").onclick$(onClick),
+        h1("Bar").onclick(onClick),
         p(LOREM),
-        div(a("Home").att$("href", "#"))
+        div(a("Home").att("href", "#"))
       )
     });
+
+    function numberToHexColor(number) {
+      number = number >>> 0;
+      let hex = number.toString(16);
+      while (hex.length < 6) hex = "0" + hex;
+      return "#" + hex;
+    }
     entry.appendChild(r);
   </script>
 </body>

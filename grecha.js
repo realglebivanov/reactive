@@ -2,6 +2,7 @@ const LOREM = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do e
 
 function observable(value) {
     let internalValue = value;
+    let notificationScheduled = false;
 
     const observers = new Map();
 
@@ -13,11 +14,12 @@ function observable(value) {
         }
     };
 
-    const notifyObservers = () => {
+    const scheduleNotifications = () => queueMicrotask(() => {
+        notificationScheduled = false;
         for (const [_, observer] of observers.entries()) {
             notifyObserver(observer);
         }
-    };
+    });
 
     return {
         getValue: () => internalValue,
@@ -30,28 +32,30 @@ function observable(value) {
         },
         updateValue: (fn) => {
             internalValue = fn(internalValue);
-            notifyObservers();
+            if (notificationScheduled) return;
+            notificationScheduled = true;
+            scheduleNotifications();
         }
     };
-}
+};
 
-function joinObservable(joinFn, ...observables) {
-    const id = Symbol('JoinObservable');
+function mapObservable(mapFn, ...observables) {
+    const id = Symbol('MapObservable');
     const currentValues = observables.map((observable) => observable.getValue());
 
-    const updateValue = (_) => joinFn.apply(undefined, currentValues);
-    const joinObservable = observable(updateValue(undefined));
+    const updateValue = (_) => mapFn(...currentValues);
+    const mapObservable = observable(mapFn(...currentValues));
 
     const notifyObservers = (i) => (newValue) => {
         currentValues[i] = newValue;
-        joinObservable.updateValue(updateValue);
+        mapObservable.updateValue(updateValue);
     };
 
     for (const [i, observable] of observables.entries()) {
         observable.subscribe(id, notifyObservers(i));
     }
 
-    return joinObservable;
+    return mapObservable;
 }
 
 function dedupObservable(innerObservable, compareEqualFn, cloneFn) {
@@ -72,6 +76,91 @@ function dedupObservable(innerObservable, compareEqualFn, cloneFn) {
 
     return dedupObservable;
 }
+
+function iterable({ it$, buildFn, keyFn }) {
+    const id = Symbol('Iterable');
+    const valueId = Symbol();
+
+    const builderFn = (buildFn) => {
+        switch (buildFn.length) {
+            case 1:
+                return (_key, value) => buildFn(value);
+            case 2:
+                return (key, value) => buildFn(key, value);
+            default:
+                throw new Error(`Invalid fn given: ${buildFn.name}`);
+        }
+    };
+
+
+    const buildKey = builderFn(keyFn);
+    const buildNode = builderFn(buildFn);
+    const currentNodes = new Map();
+
+    let nodeGeneration = 0;
+
+    const removeNodes = () => {
+        for ([key, node] of currentNodes.entries()) {
+            if (node[id] === nodeGeneration) continue;
+            node.deactivate();
+            node.remove();
+            currentNodes.delete(key);
+        }
+    }
+
+    const createNode = (key, value) => {
+        const newNode = buildNode(key, value);
+        newNode.activate();
+        currentNodes.set(key, newNode);
+        newNode[valueId] = value;
+        return newNode;
+    };
+
+    const adjustNode = (node, parentNode, refNode) => {
+        node[id] = nodeGeneration;
+
+        if (node.nextSibling == null || !node.nextSibling.isSameNode(refNode))
+            parentNode.insertBefore(node, refNode);
+
+        return node;
+    };
+
+    const rebuildOrCreateNode = (node, key, value) => {
+        if (node === undefined) return createNode(key, value);
+        if (node[valueId] === value) return node;
+        node.deactivate();
+        node.remove();
+        return createNode(key, value);
+    };
+
+    const updateNodes = (parentNode) => (newValue) => {
+        nodeGeneration++;
+        let refNode = null;
+
+        for (const [k, value] of newValue.entries()) {
+            const key = buildKey(k, value);
+            const node = rebuildOrCreateNode(currentNodes.get(key), key, value);
+            adjustNode(node, parentNode, refNode);
+            refNode = node.nextSibling;
+        }
+
+        removeNodes();
+    };
+
+
+    return (parentNode) => {
+        const updateNodeFn = updateNodes(parentNode);
+
+        return {
+            activate: () => it$.subscribeInit(id, updateNodeFn),
+            deactivate: () => {
+                it$.unsubscribe(id);
+                for (const node of currentNodes.values()) node.deactivate();
+            }
+        };
+    };
+}
+
 
 function cond({ if$, then, otherwise }) {
     const id = Symbol('Cond');
@@ -127,7 +216,8 @@ function template(template, ...observables) {
 
     const detachObservable = (observable, i) => {
         const { observerId } = nodes[i];
-        if (observerId !== undefined) observable.unsubscribe(observerId);
+        if (observerId === undefined) return;
+        observable.unsubscribe(observerId);
     };
 
     return (parentNode) => {
@@ -145,25 +235,40 @@ function template(template, ...observables) {
 
 function tag(name, ...children) {
     const result = document.createElement(name);
-    const childHandles = [];
+    const handlers = [];
 
     for (const child of children) {
         if (typeof (child) === 'string') {
-            result.appendChild(document.createTextNode(child));
+            const node = document.createTextNode(child);
+            node.activate = node.deactivate = (() => undefined);
+            result.appendChild(node);
         } else if (child instanceof Node) {
             result.appendChild(child);
-            childHandles.push(child);
+            handlers.push(child);
         } else if (typeof (child) === 'function') {
-            childHandles.push(child(result));
+            handlers.push(child(result));
         }
     }
 
-    result.att$ = function (name, value) {
+    result.att = function (name, value) {
         this.setAttribute(name, value);
         return this;
     };
 
-    result.onclick$ = function (callback) {
+    result.att$ = function (name, value$) {
+        const subscriberId = Symbol(`Attribute: ${name}`)
+
+        handlers.push({
+            activate: () => value$.subscribeInit(
+                subscriberId,
+                value => this.setAttribute(name, value)),
+            deactivate: () => value$.unsubscribe(subscriberId)
+        });
+
+        return this;
+    };
+
+    result.onclick = function (callback) {
         this.onclick = callback;
         return this;
     };
@@ -171,29 +276,29 @@ function tag(name, ...children) {
     result.activate = function () {
         if (this._active) return;
         this._active = true;
-        for (const handle of childHandles) handle.activate();
+        for (const handler of handlers) handler.activate();
     };
 
     result.deactivate = function () {
         if (!this._active) return;
         this._active = false;
-        for (const handle of childHandles) handle.deactivate();
+        for (const handler of handlers) handler.deactivate();
     };
 
     return result;
 }
 
-const MUNDANE_TAGS = ["canvas", "h1", "h2", "h3", "p", "a", "div", "span", "select"];
+const MUNDANE_TAGS = ["canvas", "button", "h1", "h2", "h3", "p", "a", "div", "ul", "li", "span", "select"];
 for (let tagName of MUNDANE_TAGS) {
     window[tagName] = (...children) => tag(tagName, ...children);
 }
 
 function img(src) {
-    return tag("img").att$("src", src);
+    return tag("img").att("src", src);
 }
 
 function input(type) {
-    return tag("input").att$("type", type);
+    return tag("input").att("type", type);
 }
 
 function router(routes) {
