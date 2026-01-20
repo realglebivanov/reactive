@@ -35,11 +35,11 @@
             otherwise: "Wood needed"
           })),
           div(span(template('Counter: ?', count$))),
-          cond({
+          div(cond({
             if$: hard$,
             then: img("KashaHard.gif").onclick(onClick),
             otherwise: img("Kasha.png").onclick(onClick)
-          }),
+          })),
           h2("Shopping items"),
           ul(
             iterable({

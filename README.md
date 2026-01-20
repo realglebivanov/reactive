@@ -46,11 +46,11 @@ https://tsoding.github.io/grecha.js/example.html
             otherwise: "Wood needed"
           })),
           div(span(template('Counter: ?', count$))),
-          cond({
+          div(cond({
             if$: hard$,
             then: img("KashaHard.gif").onclick(onClick),
             otherwise: img("Kasha.png").onclick(onClick)
-          }),
+          })),
           h2("Shopping items"),
           ul(
             iterable({
@@ -63,6 +63,8 @@ https://tsoding.github.io/grecha.js/example.html
             div(span('Name: '), input('text').att('id', 'itemName')),
             div(span('Price: '), input('text').att('id', 'itemPrice')),
             button(span('Add')).onclick(() => {
+              if (itemName.value == "" || itemPrice.value == "") return;
+
               shoppingItems$.updateValue((items) => {
                 items.push({
                   name: itemName.value,
