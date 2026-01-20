@@ -1,9 +1,28 @@
 const LOREM = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
 
+const enqueueMicrotask = function () {
+    let queued = false;
+
+    const tasks = new Map();
+    const queue = () => queueMicrotask(() => {
+        for (const task of tasks.values()) task();
+        tasks.clear();
+        queued = false;
+    });
+
+    return (id, task) => {
+        if (tasks.has(id)) return;
+        tasks.set(id, task);
+        if (queued) return;
+        queue();
+        queued = true;
+    };
+}();
+
 function observable(value) {
     let internalValue = value;
-    let notificationScheduled = false;
 
+    const id = Symbol('Observable');
     const observers = new Map();
 
     const notifyObserver = (observer) => {
@@ -14,12 +33,7 @@ function observable(value) {
         }
     };
 
-    const scheduleNotifications = () => queueMicrotask(() => {
-        notificationScheduled = false;
-        for (const [_, observer] of observers.entries()) {
-            notifyObserver(observer);
-        }
-    });
+    const notifyObservers = () => observers.values().forEach(notifyObserver);
 
     return {
         getValue: () => internalValue,
@@ -28,13 +42,11 @@ function observable(value) {
         subscribe: (id, observer) => observers.set(id, observer),
         subscribeInit: function (id, observer) {
             this.subscribe(id, observer);
-            notifyObserver(observer);
+            enqueueMicrotask(Symbol(), () => notifyObserver(observer));
         },
         updateValue: (fn) => {
             internalValue = fn(internalValue);
-            if (notificationScheduled) return;
-            notificationScheduled = true;
-            scheduleNotifications();
+            enqueueMicrotask(id, notifyObservers)
         }
     };
 };

@@ -52,6 +52,8 @@
             div(span('Name: '), input('text').att('id', 'itemName')),
             div(span('Price: '), input('text').att('id', 'itemPrice')),
             button(span('Add')).onclick(() => {
+              if (itemName.value == "" || itemPrice.value == "") return;
+
               shoppingItems$.updateValue((items) => {
                 items.push({
                   name: itemName.value,
