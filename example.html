@@ -9,81 +9,108 @@
   <div id="entry"></div>
   <script src="./grecha.js"></script>
   <script>
-    const count$ = observable(0);
-    const hard$ = observable(false);
-    const veryHard$ = observable(true);
     const shoppingItems$ = observable([
       { name: "milk", price$: observable("1.99") },
       { name: "sour cream", price$: observable("2.99") },
       { name: "cheese", price$: observable("0.99") }
     ]);
 
-    const onClick = function () {
-      count$.updateValue((count) => count + 1);
-      hard$.updateValue((hard) => !hard);
-    };
+    const counter = () => component({
+      observables: () => ({
+        count$: observable(0),
+        hard$: observable(false),
+        veryHard$: observable(true)
+      }),
+      render: ({ count$, hard$, veryHard$ }) => {
+        const click = function () {
+          count$.update((count) => count + 1);
+          hard$.update((hard) => !hard);
+        };
 
-    const r = router({
-      "/": div(
-        h1("Grecha.js"),
-        div(a("Foo").att("href", "#/foo")),
-        div(a("Bar").att("href", "#/bar")),
-        div(
+        return div(
           h2(cond({
-            if$: mapObservable((hard, veryHard) => hard & veryHard, hard$, veryHard$),
+            if$: mapObservable(
+              (hard, veryHard) => hard && veryHard, hard$, veryHard$),
             then: "Rock hard, baby",
             otherwise: "Wood needed"
           })),
           div(span(template('Counter: ?', count$))),
           div(cond({
             if$: hard$,
-            then: img("KashaHard.gif").onclick(onClick),
-            otherwise: img("Kasha.png").onclick(onClick)
-          })),
-          h2("Shopping items"),
-          ul(
-            iterable({
-              it$: shoppingItems$,
-              buildFn: (item) => li(span(template(`${item.name} - $?`, item.price$))),
-              keyFn: (item) => item.name,
-            })
-          ),
-          div(
-            div(span('Name: '), input('text').att('id', 'itemName')),
-            div(span('Price: '), input('text').att('id', 'itemPrice')),
-            button(span('Add')).onclick(() => {
-              if (itemName.value == "" || itemPrice.value == "") return;
+            then: () => img("KashaHard.gif").click(click),
+            otherwise: () => img("Kasha.png").click(click)
+          }))
+        );
+      }
+    });
 
-              shoppingItems$.updateValue((items) => {
-                items.push({
-                  name: itemName.value,
-                  price$: observable(itemPrice.value)
-                });
-                return items;
-              });
+    const shoppingForm = (item) => component({
+      render: () => div(
+        div(span('Name: '), input('text').att('id', 'itemName')),
+        div(span('Price: '), input('text').att('id', 'itemPrice')),
+        button(span('Add')).click(() => {
+          if (itemName.value == "" || itemPrice.value == "") return;
 
-              itemName.value = "";
-              itemPrice.value = "";
-            })
-          )
+          shoppingItems$.update((items) => {
+            items.push({
+              name: itemName.value,
+              price$: observable(itemPrice.value)
+            });
+            return items;
+          });
+
+          itemName.value = "";
+          itemPrice.value = "";
+        })
+      )
+    });
+
+    const shoppingList = () => component({
+      render: () => div(
+        h2("Shopping items"),
+        ul(
+          iterable({
+            it$: shoppingItems$,
+            buildFn: (item) =>
+              li(span(template(`${item.name} - $?`, item.price$))),
+            keyFn: (item) => item.name,
+          })
         )
+      )
+    });
+
+    const r = router({
+      "/": div(
+        h1("Grecha.js"),
+        div(a("Foo").att("href", "#/foo")),
+        div(a("Bar").att("href", "#/bar")),
+        counter(),
+        shoppingList(),
+        shoppingForm()
       ),
-      "/foo": div(
-        h1("Foo"),
-        p(LOREM).att$("style", mapObservable((count) => `color: ${numberToHexColor(count * 100000)}`, count$)),
-        button("Increment counter").onclick(onClick),
-        div(a("Home").att("href", "#")),
-      ),
+      "/foo": component({
+        cache: false,
+        observables: () => ({ count$: observable(0) }),
+        derivedObservables: ({ count$ }) => ({
+          paragraphStyle$: mapObservable(
+            (count) => `color: ${numberToHexColor(count * 999999)}`, count$)
+        }),
+        render: ({ count$, paragraphStyle$ }) => div(
+          h1("Foo"),
+          p(LOREM).att$("style", paragraphStyle$),
+          button("Change color").click(() => count$.update((x) => x + 1)),
+          div(a("Home").att("href", "#")),
+        )
+      }),
       "/bar": div(
-        h1("Bar").onclick(onClick),
+        h1("Bar"),
         p(LOREM),
         div(a("Home").att("href", "#"))
       )
     });
 
     function numberToHexColor(number) {
-      number = number >>> 0;
-      let hex = number.toString(16);
+      let hex = (number % 0xffffff).toString(16);
       while (hex.length < 6) hex = "0" + hex;
       return "#" + hex;
     }

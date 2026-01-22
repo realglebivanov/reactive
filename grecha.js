@@ -1,6 +1,6 @@
 const LOREM = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
 
-const enqueueMicrotask = function () {
+const buildMicrotaskRunner = function () {
     const tasks = new Set();
     const enqueue = () => queueMicrotask(() => {
         const run = Array.from(tasks);
@@ -14,23 +14,84 @@ const enqueueMicrotask = function () {
         if (tasks.size > 1) return;
         enqueue();
     };
-}();
+};
 
-function observable(value) {
-    let internalValue = value;
-    let initialized = arguments.length > 0;
+const microtaskRunner = buildMicrotaskRunner();
 
+function component({
+    render,
+    observables = (() => ({})),
+    derivedObservables = (() => ({})),
+    cache = true
+}) {
+    let componentNode, componentObservables;
+
+    const buildObservables = () => {
+        const coreObservables = observables();
+        const extraObservables = derivedObservables(coreObservables);
+
+        return Object.assign(
+            Object.assign({}, coreObservables), 
+            extraObservables);
+    };
+
+    const getOrBuildObservables = () => {
+        if (componentObservables === undefined)
+            return componentObservables = 
+                componentObservables || buildObservables();
+        
+        if (cache) return componentObservables;
+
+        return componentObservables = buildObservables();
+    };
+
+    const cleanUp = () => {
+        if (cache) return;
+        componentNode = undefined, componentObservables = undefined;
+    }
+
+    const commentNode = document.createComment('Component');
+
+    return Object.assign(commentNode, buildSwitch({
+        activate: () => {
+            if (commentNode.parentNode === null)
+                return console.warn("Node wasn't mounted before activation");
+
+            if (componentNode === undefined || !cache)
+                componentNode = render(getOrBuildObservables());
+
+            commentNode.parentNode.appendChild(componentNode);
+            componentNode.activate();
+        },
+        deactivate: () => {
+            if (commentNode.parentNode === null)
+                return console.warn("Node wasn't mounted before deactivation");
+
+            componentNode.deactivate();
+            commentNode.parentNode.removeChild(componentNode);
+            cleanUp();
+        }
+    }));
+}
+
+function observable(value, opts) {
+    const taskRunner = opts?.microtaskRunner || microtaskRunner;
     const observers = new Map();
 
-    const notify = (observer) => {
+    let internalValue = value;
+
+    const notify = (id, observer) => {
         try {
-            observer(internalValue);
+            if (observers.get(id) === observer) observer(internalValue);
         } catch (e) {
             console.error(e);
         }
     };
 
-    const notifyAll = () => observers.values().forEach(notify);
+    const notifyAll = () => {
+        for (const [id, observer] of observers.entries())
+            notify(id, observer);
+    };
 
     return {
         unsubscribeAll: () => observers.clear(),
@@ -41,12 +102,11 @@ function observable(value) {
         },
         subscribeInit: function (id, observer) {
             this.subscribe(id, observer);
-            if (initialized) enqueueMicrotask(() => notify(observer));
+            taskRunner(() => notify(id, observer));
         },
-        updateValue: (fn) => {
+        update: (fn) => {
             internalValue = fn(internalValue);
-            initialized = true;
-            enqueueMicrotask(notifyAll);
+            taskRunner(notifyAll);
         }
     };
 };
@@ -54,42 +114,94 @@ function observable(value) {
 function mapObservable(mapFn, ...observables) {
     const ids = Array.from(observables, () => Symbol('MapObservable'));
     const currentValues = new Array(observables.length);
-
-    const mapObservable = observable();
     const initializedIndices = new Set();
+    const observers = new Map();
 
-    const updateValue = (_) => mapFn(...currentValues);
     const notifyObservers = (i) => (newValue) => {
         currentValues[i] = newValue;
         initializedIndices.add(i);
-        if (initializedIndices.size === currentValues.length)
-            mapObservable.updateValue(updateValue);
+
+        if (initializedIndices.size !== currentValues.length) return;
+
+        for (const observer of observers.values())
+            observer(mapFn(...currentValues));
     };
 
-    for (const [i, observable] of observables.entries()) {
-        observable.subscribeInit(ids[i], notifyObservers(i));
-    }
+    const innerSubscribe = () => {
+        if (observers.size !== 1) return;
+        for (const [i, observable] of observables.entries()) {
+            observable.subscribeInit(ids[i], notifyObservers(i));
+        }
+    };
 
-    return mapObservable;
+    const innerUnubscribe = () => {
+        if (observers.size !== 0) return;
+        for (const [i, observable] of observables.entries()) {
+            observable.unsubscribe(ids[i]);
+        }
+    };
+
+    return {
+        unsubscribeAll: () => {
+            observers.clear();
+            innerUnubscribe();
+        },
+        unsubscribe: (id) => {
+            observers.delete(id);
+            innerUnubscribe();
+        },
+        subscribe: (id, observer) => {
+            observers.set(id, observer);
+            innerSubscribe();
+        },
+        subscribeInit: function (id, observer) {
+            this.subscribe(id, observer);
+        }
+    };
 }
 
-function dedupObservable(innerObservable, compareEqualFn, cloneFn) {
-    compareEqualFn = compareEqualFn || ((a, b) => a == b);
-    cloneFn = cloneFn || ((x) => x);
-
-    let [currentValue, initialized] = [undefined, false];
-
+function dedupObservable(
+    innerObservable,
+    compareEqualFn = ((a, b) => a == b),
+    cloneFn = ((x) => x)
+) {
     const id = Symbol('DedupObservable');
-    const dedupObservable = observable();
+    let currentValue, isInitialized = false;
 
-    innerObservable.subscribeInit(id, (value) => {
-        if (initialized && compareEqualFn(currentValue, value)) return;
-        initialized = true;
-        currentValue = cloneFn(value);
-        dedupObservable.updateValue((_) => currentValue);
-    });
+    const innerSubscribe = () => {
+        if (observers.size !== 1) return;
+        innerObservable.subscribeInit(id, (value) => {
+            if (isInitialized && compareEqualFn(currentValue, value)) return;
+            currentValue = cloneFn(value), isInitialized = true;
+            for (const observer of observers.values()) observer(currentValue);
+        });
+    };
 
-    return dedupObservable;
+    const innerUnubscribe = () => {
+        if (observers.size !== 0) return;
+        currentValue = undefined, isInitialized = false;
+        innerObservable.unsubscribe(id);
+    };
+
+    const observers = new Map();
+
+    return {
+        unsubscribeAll: () => {
+            observers.clear();
+            innerUnubscribe();
+        },
+        unsubscribe: (id) => {
+            observers.delete(id);
+            innerUnubscribe();
+        },
+        subscribe: (id, observer) => {
+            observers.set(id, observer);
+            innerSubscribe();
+        },
+        subscribeInit: function (id, observer) {
+            this.subscribe(id, observer);
+        }
+    };
 }
 
 function buildSwitch({ activate, deactivate }) {
@@ -141,17 +253,18 @@ function iterable({ it$, buildFn, keyFn }) {
 
     const createNode = (key, value) => {
         const newNode = buildNode(key, value);
-        newNode.activate();
         currentNodes.set(key, newNode);
         newNode[valueId] = value;
         return newNode;
     };
 
     const adjustNode = (node, parentNode, refNode) => {
-        node[id] = nodeGeneration;
-
-        if (node.nextSibling == null || !node.nextSibling.isSameNode(refNode))
+        if (node.nextSibling == null || !node.nextSibling.isSameNode(refNode)) {
             parentNode.insertBefore(node, refNode);
+            if (node[id] === undefined) node.activate();
+        }
+
+        node[id] = nodeGeneration;
 
         return node;
     };
@@ -164,7 +277,7 @@ function iterable({ it$, buildFn, keyFn }) {
         return createNode(key, value);
     };
 
-    const updateNodes = (parentNode) => (newValue) => {
+    const updateNodes = (parentNode, newValue) => {
         nodeGeneration++;
         let refNode = null;
 
@@ -178,18 +291,25 @@ function iterable({ it$, buildFn, keyFn }) {
         removeStaleNodes();
     };
 
-
-    return (parentNode) => {
-        const updateNodeFn = updateNodes(parentNode);
-
-        return buildSwitch({
-            activate: () => it$.subscribeInit(id, updateNodeFn),
-            deactivate: () => {
-                it$.unsubscribe(id);
-                for (const node of currentNodes.values()) node.deactivate();
-            }
-        });
+    const deactivate = () => {
+        it$.unsubscribe(id);
+        for (const node of currentNodes.values()) {
+            node.deactivate();
+            node.remove();
+        }
+        currentNodes.clear();
     };
+
+    const commentNode = document.createComment('Iterable');
+    const updateNodeFn = (newValue) => {
+        if (commentNode.parentNode !== null)
+            updateNodes(commentNode.parentNode, newValue);
+    };
+
+    return Object.assign(commentNode, buildSwitch({
+        activate: () => it$.subscribeInit(id, updateNodeFn),
+        deactivate
+    }));
 }
 
 
@@ -197,33 +317,60 @@ function cond({ if$, then, otherwise }) {
     const id = Symbol('Cond');
     const observable = dedupObservable(if$);
 
-    const thenNode =
-        then instanceof Node ? then : document.createTextNode(then);
-    const otherwiseNode =
-        otherwise instanceof Node ? otherwise : document.createTextNode(otherwise);
+    const buildNode = (node) => {
+        if (typeof (node) === 'function') return node();
+        if (typeof (node) === 'string') return document.createTextNode(node);
+        throw new Error('Then/otherwise should be either strings or functions');
+    };
+
+    const [thenNode, otherwiseNode] = [buildNode(then), buildNode(otherwise)];
+
     let currentNode = null;
 
-    const updateNode = (parentNode) => (value) => {
-        const node = value ? thenNode : otherwiseNode;
+    const detachCurrentNode = () => {
+        if (currentNode === null) return;
+        if (currentNode.deactivate !== undefined) currentNode.deactivate();
+        currentNode.remove();
+        currentNode = null;
+    }
 
+    const switchNode = (parentNode, node) => {
+        if (currentNode?.deactivate !== undefined) currentNode.deactivate();
+        if (node.activate !== undefined) node.activate();
+
+        currentNode === null ?
+            parentNode.appendChild(node) : currentNode.replaceWith(node);
+
+        currentNode = node;
+    };
+
+    const deactivate = (parentNode) => {
+        observable.unsubscribe(id);
         try {
-            currentNode === null ?
-                parentNode.appendChild(node) :
-                parentNode.replaceChild(node, currentNode);
-            currentNode = node;
+            detachCurrentNode(parentNode);
         } catch (e) {
             console.error(e);
         }
     };
 
-    return (parentNode) => {
-        const updateNodeFn = updateNode(parentNode);
-
-        return buildSwitch({
-            activate: () => observable.subscribeInit(id, updateNodeFn),
-            deactivate: () => observable.unsubscribe(id)
-        });
+    const updateNode = (parentNode, value) => {
+        try {
+            switchNode(parentNode, value ? thenNode : otherwiseNode);
+        } catch (e) {
+            console.error(e);
+        }
     };
+
+    const commentNode = document.createComment('Cond');
+    const updateNodeFn = (value) => {
+        if (commentNode.parentNode !== null)
+            updateNode(commentNode.parentNode, value);
+    };
+
+    return Object.assign(commentNode, buildSwitch({
+        activate: () => observable.subscribe(id, updateNodeFn),
+        deactivate: () => deactivate(commentNode.parentNode)
+    }));
 }
 
 function template(template, ...observables) {
@@ -250,17 +397,42 @@ function template(template, ...observables) {
         observable.unsubscribe(observerId);
     };
 
-    return (parentNode) => {
+    const appendNodes = () => {
+        const parentNode = commentNode.parentNode;
+
+        if (parentNode === null)
+            return console.warn("Node wasn't mounted before activation");
+
         for (const { staticNode, dynamicNode } of nodes) {
             parentNode.appendChild(staticNode);
             if (dynamicNode !== undefined) parentNode.appendChild(dynamicNode);
         }
-
-        return buildSwitch({
-            activate: () => observables.forEach(attachObservable),
-            deactivate: () => observables.forEach(detachObservable)
-        });
     };
+
+    const removeNodes = () => {
+        const parentNode = commentNode.parentNode;
+
+        if (parentNode === null)
+            return console.warn("Node wasn't mounted before deactivation");
+
+        for (const { staticNode, dynamicNode } of nodes) {
+            parentNode.removeChild(staticNode);
+            if (dynamicNode !== undefined) parentNode.removeChild(dynamicNode);
+        }
+    };
+
+    const commentNode = document.createComment('Template');
+
+    return Object.assign(commentNode, buildSwitch({
+        activate: () => {
+            appendNodes();
+            observables.forEach(attachObservable)
+        },
+        deactivate: () => {
+            removeNodes();
+            observables.forEach(detachObservable)
+        }
+    }));
 }
 
 function tag(name, ...children) {
@@ -275,8 +447,6 @@ function tag(name, ...children) {
         } else if (child instanceof Node) {
             result.appendChild(child);
             handlers.push(child);
-        } else if (typeof (child) === 'function') {
-            handlers.push(child(result));
         }
     }
 
@@ -298,22 +468,22 @@ function tag(name, ...children) {
         return this;
     };
 
-    result.onclick = function (callback) {
-        this.addEventListener('click', callback);
+    result.click = function (callback) {
+        handlers.push({
+            activate: () => this.addEventListener('click', callback),
+            deactivate: () => this.removeEventListener('click', callback)
+        });
         return this;
     };
 
-    const { activate, deactivate } = buildSwitch({
+    Object.assign(result, buildSwitch({
         activate: () => {
             for (const handler of handlers) handler.activate();
         },
         deactivate: () => {
             for (const handler of handlers) handler.deactivate();
         }
-    });
-
-    result.activate = activate;
-    result.deactivate = deactivate;
+    }));
 
     return result;
 }
@@ -332,19 +502,8 @@ function input(type) {
 }
 
 function router(routes) {
-    let result = div();
-
-    result.enterRoute = function () {
-        for (const child of this.childNodes) {
-            if (typeof (child.activate) === 'function') child.activate();
-        }
-    };
-
-    result.exitRoute = function () {
-        for (const child of this.childNodes) {
-            if (typeof (child.activate) === 'function') child.deactivate();
-        }
-    };
+    const router = div();
+    let currentNode = null;
 
     function syncHash() {
         let hashLocation = document.location.hash.split('#')[1];
@@ -360,11 +519,12 @@ function router(routes) {
             hashLocation = route404;
         }
 
-        result.exitRoute();
-        result.replaceChildren(routes[hashLocation]);
-        result.enterRoute();
+        currentNode?.deactivate();
+        currentNode = routes[hashLocation];
+        router.replaceChildren(currentNode);
+        currentNode.activate();
 
-        return result;
+        return router;
     };
 
     syncHash();
@@ -372,5 +532,5 @@ function router(routes) {
     // TODO(#3): there is way to "destroy" an instance of the router to make it remove it's "hashchange" callback
     window.addEventListener("hashchange", syncHash);
 
-    return result;
+    return router;
 }
