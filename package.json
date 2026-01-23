@@ -1,0 +1,36 @@
+{
+  "name": "oatmeal",
+  "version": "1.0.0",
+  "description": "![KashaHard](KashaHard.gif)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "watch": "tsup --watch",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/realglebivanov/grecha.js.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/realglebivanov/grecha.js/issues"
+  },
+  "homepage": "https://github.com/realglebivanov/grecha.js#readme",
+  "devDependencies": {
+    "npx": "^10.2.2",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  }
+}

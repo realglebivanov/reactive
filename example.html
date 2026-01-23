@@ -7,8 +7,26 @@
 
 <body>
   <div id="entry"></div>
-  <script src="./grecha.js"></script>
-  <script>
+  <script type="module">
+    import {
+      observable,
+      cond,
+      template,
+      iterable,
+      component,
+      mapObservable,
+      router,
+      tags,
+    } from "./dist/index.js";
+
+    const LOREM = dedent`
+      Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+      Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+      Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+      Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.`;
+
+    const { a, p, h1, h2, div, span, button, ul, li, img, input } = tags;
+
     const shoppingItems$ = observable([
       { name: "milk", price$: observable("1.99") },
       { name: "sour cream", price$: observable("2.99") },
@@ -37,8 +55,8 @@
           div(span(template('Counter: ?', count$))),
           div(cond({
             if$: hard$,
-            then: () => img("KashaHard.gif").click(click),
-            otherwise: () => img("Kasha.png").click(click)
+            then: () => img("KashaHard.gif").clk(click),
+            otherwise: () => img("Kasha.png").clk(click)
           }))
         );
       }
@@ -48,7 +66,7 @@
       render: () => div(
         div(span('Name: '), input('text').att('id', 'itemName')),
         div(span('Price: '), input('text').att('id', 'itemPrice')),
-        button(span('Add')).click(() => {
+        button(span('Add')).clk(() => {
           if (itemName.value == "" || itemPrice.value == "") return;
 
           shoppingItems$.update((items) => {
@@ -71,9 +89,9 @@
         ul(
           iterable({
             it$: shoppingItems$,
-            buildFn: (item) =>
+            buildFn: (_, item) =>
               li(span(template(`${item.name} - $?`, item.price$))),
-            keyFn: (item) => item.name,
+            keyFn: (_, item) => item.name,
           })
         )
       )
@@ -89,7 +107,6 @@
         shoppingForm()
       ),
       "/foo": component({
-        cache: false,
         observables: () => ({ count$: observable(0) }),
         derivedObservables: ({ count$ }) => ({
           paragraphStyle$: mapObservable(
@@ -98,7 +115,7 @@
         render: ({ count$, paragraphStyle$ }) => div(
           h1("Foo"),
           p(LOREM).att$("style", paragraphStyle$),
-          button("Change color").click(() => count$.update((x) => x + 1)),
+          button("Change color").clk(() => count$.update((x) => x + 1)),
           div(a("Home").att("href", "#")),
         )
       }),
@@ -108,6 +125,10 @@
         div(a("Home").att("href", "#"))
       )
     });
+
+    function dedent(s) {
+      return s.raw[0].replace(/^\s+/gm, "").trim();
+    }
 
     function numberToHexColor(number) {
       let hex = (number % 0xffffff).toString(16);
