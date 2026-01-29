@@ -1,12 +1,11 @@
-import { buildSwitch, ensureSwitch } from "..";
 import type { Observable } from "../observables";
-import type { DomObject } from "../tag";
+import { toReactiveNode, type ReactiveNode } from "./reactive";
 
 type Key = string | number | boolean | symbol;
-type BuildFn<T> = ((key: Key, value: T) => ItDomObject<T>);
+type BuildFn<N extends Node, T> = ((key: Key, value: T) => ReactiveNode<N>);
 type KeyFn<T> = ((key: Key, value: T) => Key);
 
-type ItDomObject<T> = DomObject & {
+type ItReactiveNode<N extends Node, T> = ReactiveNode<N> & {
     [generationId]: number | undefined,
     [valueId]: T | undefined
 };
@@ -15,30 +14,30 @@ type Source<T> = Array<T> | Map<Key, T>;
 const generationId = Symbol('genid');
 const valueId = Symbol('valid');
 
-export const iterable = <T>(
+export const iterable = <T, N extends Node>(
     { it$, buildFn, keyFn }: {
         it$: Observable<Source<T>>,
-        buildFn: BuildFn<T>,
+        buildFn: BuildFn<N, T>,
         keyFn: KeyFn<T>
     }
-) => new Iterable<T>(
+) => new Iterable<T, N>(
     it$,
     buildFn,
     keyFn
-).toNode();
+).toReactiveNode();
 
-class Iterable<T> {
+class Iterable<T, N extends Node> {
     private readonly id = Symbol('Iterable');
-    private currentNodes = new Map<Key, ItDomObject<T>>();
+    private currentNodes = new Map<Key, ItReactiveNode<N, T>>();
     private nodeGeneration = 0;
 
     constructor(
         private it$: Observable<Source<T>>,
-        private buildFn: BuildFn<T>,
+        private buildFn: BuildFn<N, T>,
         private keyFn: KeyFn<T>
     ) { }
 
-    toNode() {
+    toReactiveNode() {
         const commentNode = document.createComment('Iterable');
 
         const updateNodeFn = (newValue: Source<T>) => {
@@ -48,7 +47,7 @@ class Iterable<T> {
             this.updateNodes(commentNode.parentNode, newValue);
         };
 
-        return Object.assign(commentNode, buildSwitch({
+        return toReactiveNode(commentNode, [{
             activate: () => this.it$.subscribeInit(this.id, updateNodeFn),
             deactivate: () => {
                 if (commentNode.parentNode === null)
@@ -56,7 +55,7 @@ class Iterable<T> {
 
                 this.deactivateNodes(commentNode.parentNode);
             }
-        }));
+        }]);
     }
 
     private deactivateNodes(parentNode: Node) {
@@ -97,14 +96,14 @@ class Iterable<T> {
     }
 
     private createNode(key: Key, value: T) {
-        const newNode = ensureSwitch(this.buildFn(key, value));
+        const newNode = this.buildFn(key, value) as ItReactiveNode<N, T>;
         this.currentNodes.set(key, newNode);
         newNode[valueId] = value;
 
         return newNode;
     }
 
-    private adjustNode(node: ItDomObject<T>, parentNode: Node, refNode: Node | null) {
+    private adjustNode(node: ItReactiveNode<N, T>, parentNode: Node, refNode: Node | null) {
         if (node.nextSibling == null || !node.nextSibling.isSameNode(refNode)) {
             parentNode.insertBefore(node, refNode);
             if (node[generationId] === undefined) node.activate();

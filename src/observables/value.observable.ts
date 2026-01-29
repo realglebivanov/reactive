@@ -1,17 +1,17 @@
-import type { Observable, Observer, UpdateFn } from ".";
-import { microtaskRunner, type TaskRunner } from "..";
+import type { Observable, Observer, Updatable, UpdateFn } from ".";
+import { microtaskRunner, type TaskRunner } from "../task";
 
 export const observable = <T>(
     value: T,
-    opts: { microtaskRunner: TaskRunner } | undefined
+    opts: { microtaskRunner: TaskRunner } = { microtaskRunner }
 ) => new ValueObservable(value, opts);
 
-class ValueObservable<T> implements Observable<T> {
+class ValueObservable<T> implements Observable<T>, Updatable<T> {
     private readonly observers = new Map<symbol, Observer<T>>();
 
     constructor(
         private value: T,
-        private opts = { microtaskRunner }
+        private opts: { microtaskRunner: TaskRunner }
     ) { }
 
     unsubscribeAll() {

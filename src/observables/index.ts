@@ -8,6 +8,11 @@ export interface Observable<T> {
     subscribeInit(id: symbol, observer: Observer<T>): void;
 }
 
+export interface Updatable<T> {
+    update(updateFn: UpdateFn<T>): void;
+}
+
 export * from "./value.observable";
 export * from "./map.observable";
 export * from "./dedup.observable";
+export * from "./scoped.observable";

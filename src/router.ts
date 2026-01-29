@@ -1,38 +1,73 @@
-import type { DomObject } from "./tag";
-import { tags } from "./tag";
+import type { ReactiveNode } from "./nodes";
 
-export const router = (routes: Record<string, DomObject>) => {
-    const instance = tags.div();
-
-    let currentRoute: DomObject | undefined;
-
-    function syncHash() {
-        let hashLocation = document.location.hash.split('#')[1];
-        if (!hashLocation) {
-            hashLocation = '/';
-        }
-
-        if (!(hashLocation in routes)) {
-            // TODO(#2): make the route404 customizable in the router component
-            const route404 = '/404';
-
-            console.assert(route404 in routes);
-            hashLocation = route404;
-        }
-
-        currentRoute?.deactivate();
-        currentRoute = routes[hashLocation];
-        
-        if (currentRoute !== undefined) {
-            instance.replaceChildren(currentRoute);
-            currentRoute.activate();
-        }
-    };
-
-    syncHash();
-
-    // TODO(#3): there is way to "destroy" an instance of the router to make it remove it's "hashchange" callback
-    window.addEventListener("hashchange", syncHash);
-
-    return instance;
+type RouteKey<T> = keyof T & string;
+type Route<T extends RouteCollection<Node>> = T[keyof T];
+type RouteCollection<N extends Node> = Record<string, ReactiveNode<N>>;
+type RouterOpts<T extends RouteCollection<Node>> = {
+    notFoundRoute: RouteKey<T>;
 };
+
+export const router = <
+    T extends RouteCollection<Node>
+>(routes: T, opts: RouterOpts<T>) => new Router<T>(routes, opts);
+
+class Router<T extends RouteCollection<Node>> {
+    private parent: HTMLElement | undefined = undefined;
+    private currentRoute: Route<T> | undefined = undefined;
+    private hashChangeListener = () => this.syncHash();
+
+    constructor(
+        private routes: T, 
+        private opts: RouterOpts<T>
+    ) { }
+
+    mount(parent: HTMLElement) {
+        if (this.parent !== undefined)
+            return console.warn("Router is already mounted");
+        this.parent = parent;
+        window.addEventListener("hashchange", this.hashChangeListener);
+        this.syncHash();
+    }
+
+    unmount() {
+        this.currentRoute?.deactivate();
+        if (this.currentRoute !== undefined)
+            this.parent?.removeChild(this.currentRoute);
+        this.parent = undefined;
+        this.currentRoute = undefined;
+        window.removeEventListener("hashchange", this.hashChangeListener);
+    }
+
+    private syncHash() {
+        const newRoute = this.getNewRoute();
+        if (newRoute === this.currentRoute) return;
+        if (newRoute === undefined) return;
+
+        this.currentRoute?.deactivate();
+        this.replaceRoute(newRoute);
+        newRoute.activate();
+        this.currentRoute = newRoute;
+    }
+
+    private replaceRoute(newRoute: Route<T>) {
+        if (this.currentRoute === undefined) {
+            this.parent?.appendChild(newRoute);
+        } else {
+            this.parent?.replaceChild(newRoute, this.currentRoute);
+        }
+    }
+
+    private getNewRoute(): Route<T> | undefined {
+        const hashLocation = location.hash.slice(1) || "/";
+
+        const routeKey: RouteKey<T> = this.isRouteKey(hashLocation)
+            ? hashLocation
+            : this.opts.notFoundRoute;
+
+        return this.routes[routeKey];
+    }
+
+    private isRouteKey(key: string): key is RouteKey<T> { 
+        return key in this.routes;
+    }
+}

@@ -1,47 +1,62 @@
-import { buildSwitch, type DomObject, type Observable } from "..";
+import {
+    scopedObservable,
+    ScopedObservable,
+    type Observable
+} from "../observables";
+import { toReactiveNode, type ReactiveNode } from "./reactive";
 
 type Observables<T> = { [K in keyof T]: Observable<T[K]> };
 
-type Params<O1 extends Observables<{}>, O2 extends Observables<{}>> = {
-    render: (observables: O1 & O2) => DomObject,
-    observables: () => O1,
-    derivedObservables: () => O2,
-    cache: boolean
+type ScopedObservables<T> = {
+    [K in keyof T]: T[K] extends Observable<any> ?
+    ScopedObservable<T[K]> :
+    never
+};
+
+type RenderFn<O1 extends Observables<{}>, O2 extends Observables<{}>, T extends Node> =
+    (observables: ScopedObservables<O1 & O2>) => ReactiveNode<T>;
+
+type Params<O1 extends Observables<{}>, O2 extends Observables<{}>, T extends Node> = {
+    render: RenderFn<O1, O2, T>,
+    observables?: () => O1,
+    derivedObservables?: (observables: O1) => O2,
+    cache?: boolean
 };
 
 export const component = <
     O1 extends Observables<{}>,
-    O2 extends Observables<{}>
+    O2 extends Observables<{}>,
+    T extends Node
 >({
     render,
     observables = (() => ({} as O1)),
-    derivedObservables = (() => ({} as O2)),
+    derivedObservables = ((_: O1) => ({} as O2)),
     cache = true
-}: Params<O1, O2>): DomObject => new Component<O1, O2>(
+}: Params<O1, O2, T>): ReactiveNode<Comment> => new Component<O1, O2, T>(
     render,
     observables,
     derivedObservables,
     cache
-).toNode();
+).toReactiveNode();
 
-class Component<O1 extends Observables<{}>, O2 extends Observables<{}>> {
-    private node: DomObject | undefined;
-    private observables: O1 & O2 | undefined;
+class Component<O1 extends Observables<{}>, O2 extends Observables<{}>, T extends Node> {
+    private node: ReactiveNode<T> | undefined;
+    private observables: ScopedObservables<O1 & O2> | undefined;
 
     constructor(
-        private render: (observables: O1 & O2) => DomObject,
+        private render: RenderFn<O1, O2, T>,
         private observableBuilder: () => O1,
         private derivedObservableBuilder: (observables: O1) => O2,
         private cache: boolean
     ) { }
 
-    toNode() {
-        const commentNode = document.createComment('Component');
+    toReactiveNode() {
+        const commentNode: Comment = document.createComment('Component');
 
-        return Object.assign(commentNode, buildSwitch({
+        return toReactiveNode(commentNode, [{
             activate: () => this.activate(commentNode),
             deactivate: () => this.deactivate(commentNode)
-        }));
+        }]);
     }
 
     private activate(commentNode: Comment) {
@@ -77,15 +92,31 @@ class Component<O1 extends Observables<{}>, O2 extends Observables<{}>> {
     private buildObservables() {
         const coreObservables = this.observableBuilder();
         const extraObservables = this.derivedObservableBuilder(coreObservables);
+        const proxyObservables: Partial<ScopedObservables<O1 & O2>> = {};
 
-        return Object.assign(
-            Object.assign({}, coreObservables),
-            extraObservables);
+        for (const key in coreObservables) {
+            const k = key as keyof O1;
+            const v = coreObservables[k] as any;
+            proxyObservables[k] = scopedObservable(v) as any;
+        }
+
+        for (const key in extraObservables) {
+            const k = key as keyof O2;
+            const v = extraObservables[k] as any;
+            proxyObservables[k] = scopedObservable(v) as any;
+        }
+
+        return proxyObservables as ScopedObservables<O1 & O2>;
     }
 
     private cleanUp() {
         if (this.cache) return;
         this.node = undefined;
+        if (this.observables === undefined) return;
+
+        for (const key in this.observables)
+            this.observables[key as (keyof O1 & keyof O2)].unsubscribeAll();
+
         this.observables = undefined;
     }
 }

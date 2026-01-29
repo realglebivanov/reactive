@@ -16,7 +16,7 @@ export const mapObservable = <
 ): MapObservable<Observables, R> =>
     new MapObservable(mapFn, observables);
 
-class MapObservable<Observables extends readonly Observable<any>[], R> {
+class MapObservable<Observables extends readonly Observable<any>[], R> implements Observable<R> {
     private observers = new Map<symbol, Observer<R>>();
     private initializedIndices = new Set<keyof Observables>();
 

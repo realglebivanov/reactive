@@ -1,10 +1,10 @@
-import { buildSwitch } from "..";
 import type { Observable } from "../observables";
+import { toReactiveNode } from "./reactive";
 
 // TODO: check at compile time that 
 // substitution count in `template` matches `observables` length
 
-type Node = {
+type PartialTextNode = {
         observerId: symbol,
         staticNode: Text,
         dynamicNode: Text | undefined
@@ -13,7 +13,7 @@ type Node = {
 export const template = (
     template: string,
     ...observables: Observable<string>[]
-) => new Template(template, observables).toNode();
+) => new Template(template, observables).toReactiveNode();
 
 class Template {
     constructor(
@@ -21,11 +21,11 @@ class Template {
         private observables: Observable<string>[]
     ) { }
 
-    toNode() {
+    toReactiveNode() {
         const nodes = this.buildNodes();
         const commentNode = document.createComment('Template');
 
-        return Object.assign(commentNode, buildSwitch({
+        return toReactiveNode(commentNode, [{
             activate: () => {
                 this.appendNodes(nodes, commentNode);
                 for (const [i, observable] of this.observables.entries())
@@ -36,7 +36,7 @@ class Template {
                 for (const [i, observable] of this.observables.entries())
                     this.detachObservable(nodes[i], observable);
             }
-        }));
+        }]);
     }
 
     private buildNodes() {
@@ -50,7 +50,7 @@ class Template {
         }));
     }
 
-    private appendNodes(nodes: Node[], commentNode: Comment) {
+    private appendNodes(nodes: PartialTextNode[], commentNode: Comment) {
         const parentNode = commentNode.parentNode;
 
         if (parentNode === null)
@@ -62,14 +62,14 @@ class Template {
         }
     };
 
-    private attachObservable(node: Node | undefined, observable: Observable<string>) {
+    private attachObservable(node: PartialTextNode | undefined, observable: Observable<string>) {
         if (node === undefined) return;
         if (node.dynamicNode === undefined) return;
         observable.subscribeInit(
             node.observerId, (value) => (node.dynamicNode as Text).data = value);
     };
 
-    private removeNodes(nodes: Node[], commentNode: Comment) {
+    private removeNodes(nodes: PartialTextNode[], commentNode: Comment) {
         const parentNode = commentNode.parentNode;
 
         if (parentNode === null)
@@ -81,7 +81,7 @@ class Template {
         }
     };
 
-    private detachObservable(node: Node | undefined, observable: Observable<string>) {
+    private detachObservable(node: PartialTextNode | undefined, observable: Observable<string>) {
         if (node === undefined) return;
         observable.unsubscribe(node.observerId);
     };

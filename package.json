@@ -16,6 +16,7 @@
   "scripts": {
     "build": "tsup",
     "watch": "tsup --watch",
+    "serve": "npx serve dist/",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -29,7 +30,6 @@
   },
   "homepage": "https://github.com/realglebivanov/grecha.js#readme",
   "devDependencies": {
-    "npx": "^10.2.2",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"
   }

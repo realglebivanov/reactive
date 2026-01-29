@@ -1,7 +1,10 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  entry: {
+    index: "src/index.ts",
+    example: "src/example.ts",
+  },
   tsconfig: "tsconfig.json",
 
   format: ["esm"],
@@ -14,4 +17,5 @@ export default defineConfig({
   clean: true,
 
   treeshake: true,
+  publicDir: './public'
 });

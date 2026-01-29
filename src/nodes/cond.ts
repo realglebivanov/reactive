@@ -1,27 +1,36 @@
-import { buildSwitch, ensureSwitch, type Lifecycle } from "..";
 import { dedupObservable, type Observable } from "../observables";
-import type { DomObject } from "../tag";
+import { toReactiveNode, type ReactiveNode } from "./reactive";
 
-type NodeFrom = (() => DomObject & Partial<Lifecycle>) | string;
-type Params = { if$: Observable<boolean>, then: NodeFrom, otherwise: NodeFrom }
+type ReactiveNodeBuilder<T extends Node> = (() => ReactiveNode<T>);
 
-export const cond = ({ if$, then, otherwise }: Params): DomObject => new Cond(
+type Params<A extends Node, B extends Node> = {
+    if$: Observable<boolean>, 
+    then: ReactiveNodeBuilder<A> | string, 
+    otherwise: ReactiveNodeBuilder<B> | string
+};
+
+type CurrentNode<A extends Node, B extends Node> =
+    ReactiveNode<A> | ReactiveNode<B> | ReactiveNode<Text>;
+
+export const cond = <A extends Node, B extends Node>(
+    { if$, then, otherwise }: Params<A, B>
+): ReactiveNode<Comment> => new Cond<A, B>(
     dedupObservable(if$),
     then,
     otherwise
-).toNode();
+).toReactiveNode();
 
-class Cond {
+class Cond<A extends Node, B extends Node> {
     private id = Symbol('Cond');
-    private currentNode: DomObject | undefined;
+    private currentNode: CurrentNode<A, B> | undefined;
 
     constructor(
         private if$: Observable<boolean>,
-        private then: NodeFrom,
-        private otherwise: NodeFrom
+        private then: ReactiveNodeBuilder<A> | string,
+        private otherwise: ReactiveNodeBuilder<B> | string
     ) { }
 
-    toNode() {
+    toReactiveNode() {
         const commentNode = document.createComment('Cond');
 
         const updateNodeFn = (value: boolean) => {
@@ -31,16 +40,17 @@ class Cond {
             this.updateNode(commentNode.parentNode, value);
         };
 
-        return Object.assign(commentNode, buildSwitch({
-            activate: () => this.if$.subscribe(this.id, updateNodeFn),
+        return toReactiveNode(commentNode, [{
+            activate: () => this.if$.subscribeInit(this.id, updateNodeFn),
             deactivate: () => this.deactivate(commentNode.parentNode)
-        }));
+        }]);
     }
 
-    private buildNode(node: NodeFrom): DomObject {
-        if (typeof (node) === 'function') return ensureSwitch(node());
-        if (typeof (node) === 'string')
-            return ensureSwitch(document.createTextNode(node));
+    private buildNode<T extends Node>(node: string | ReactiveNodeBuilder<T>) {
+        if (typeof (node) === 'function') 
+            return node();
+        if (typeof (node) === 'string') 
+            return toReactiveNode(document.createTextNode(node), []);
 
         throw new Error('Then/otherwise should be either strings or functions');
     };
@@ -56,10 +66,9 @@ class Cond {
     };
 
     private detachCurrentNode(parentNode: Node | null) {
-        const currentNode = this.currentNode;
-        
-        if (currentNode === undefined) return;
+        if (this.currentNode === undefined) return;
 
+        const currentNode = this.currentNode;
         currentNode.deactivate();
         this.currentNode = undefined;
 
@@ -71,15 +80,16 @@ class Cond {
 
     private updateNode(parentNode: Node, value: boolean) {
         try {
-            const newNode = value ?
-                this.buildNode(this.then) : this.buildNode(this.otherwise);
+            const newNode = value ? 
+                this.buildNode<A>(this.then) :  
+                this.buildNode<B>(this.otherwise);
             this.switchNode(parentNode, newNode);
         } catch (e) {
             console.error(e);
         }
     };
 
-    private switchNode(parentNode: Node, node: DomObject) {
+    private switchNode(parentNode: Node, node: CurrentNode<A, B>) {
         this.currentNode?.deactivate();
         node.activate();
 
