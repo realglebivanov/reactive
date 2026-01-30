@@ -91,13 +91,13 @@ class Cond<A extends Node, B extends Node> {
 
     private switchNode(parentNode: Node, node: CurrentNode<A, B>) {
         this.currentNode?.deactivate();
-        node.activate();
 
         if (this.currentNode === undefined)
             parentNode.appendChild(node);
         else
             parentNode.replaceChild(node, this.currentNode);
 
+        node.activate();
         this.currentNode = node;
     };
 }

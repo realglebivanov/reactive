@@ -7,6 +7,7 @@ import {
     mapObservable,
     router,
     tags,
+    dedupObservable,
 } from ".";
 
 const LOREM = `
@@ -30,10 +31,14 @@ const counter = () => component({
         veryHard$: observable(true)
     }),
     render: ({ count$, hard$, veryHard$ }) => {
-        const click = function () {
+        const onClick = function () {
             count$.update((count) => count + 1);
             hard$.update((hard) => !hard);
         };
+
+        const imageSource$ = mapObservable(
+            (hard) => hard ? "KashaHard.gif" : "Kasha.png", 
+            dedupObservable(hard$));
 
         return div(
             h2(cond({
@@ -42,12 +47,8 @@ const counter = () => component({
                 then: "Rock hard, baby",
                 otherwise: "Wood needed"
             })),
-            div(span(template('Counter: ?', mapObservable((x) => x.toString(), count$)))),
-            div(cond({
-                if$: hard$,
-                then: () => img("KashaHard.gif").clk(click),
-                otherwise: () => img("Kasha.png").clk(click)
-            }))
+            div(span(template('Counter: ?', mapObservable((x) => x.toString(16), count$)))),
+            div(img("Kasha.png").att$("src", imageSource$).clk(onClick))
         );
     }
 });
