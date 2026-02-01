@@ -26,16 +26,16 @@ class Template {
         const commentNode = document.createComment('Template');
 
         return toReactiveNode(commentNode, [{
+            mount: (parentNode: Node) => this.appendNodes(parentNode, nodes),
             activate: () => {
-                this.appendNodes(nodes, commentNode);
                 for (const [i, observable] of this.observables.entries())
                     this.attachObservable(nodes[i], observable);
             },
             deactivate: () => {
-                this.removeNodes(nodes, commentNode);
                 for (const [i, observable] of this.observables.entries())
                     this.detachObservable(nodes[i], observable);
-            }
+            },
+            unmount: () => this.removeNodes(nodes),
         }]);
     }
 
@@ -50,12 +50,7 @@ class Template {
         }));
     }
 
-    private appendNodes(nodes: PartialTextNode[], commentNode: Comment) {
-        const parentNode = commentNode.parentNode;
-
-        if (parentNode === null)
-            return console.warn("Node wasn't mounted before activation");
-
+    private appendNodes(parentNode: Node, nodes: PartialTextNode[]) {
         for (const { staticNode, dynamicNode } of nodes) {
             parentNode.appendChild(staticNode);
             if (dynamicNode !== undefined) parentNode.appendChild(dynamicNode);
@@ -69,15 +64,10 @@ class Template {
             node.observerId, (value) => (node.dynamicNode as Text).data = value);
     };
 
-    private removeNodes(nodes: PartialTextNode[], commentNode: Comment) {
-        const parentNode = commentNode.parentNode;
-
-        if (parentNode === null)
-            return console.warn("Node wasn't mounted before deactivation");
-
+    private removeNodes(nodes: PartialTextNode[]) {
         for (const { staticNode, dynamicNode } of nodes) {
-            parentNode.removeChild(staticNode);
-            if (dynamicNode !== undefined) parentNode.removeChild(dynamicNode);
+            staticNode.remove()
+            if (dynamicNode !== undefined) dynamicNode.remove();
         }
     };
 

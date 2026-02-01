@@ -7,7 +7,7 @@ import {
     mapObservable,
     router,
     tags,
-    dedupObservable,
+    dedupObservable
 } from ".";
 
 const LOREM = `
@@ -17,6 +17,18 @@ const LOREM = `
       Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.`;
 
 const { a, p, h1, h2, div, span, button, ul, li, img, input } = tags;
+
+(window as any).upd = () => {
+    shoppingItems$.update((items) => {
+        items.unshift({
+            name: "bread", price$: observable("2.49")
+        });
+        items.push({
+            name: "butter", price$: observable("3.49")
+        });
+        return items;
+    });
+};
 
 const shoppingItems$ = observable([
     { name: "milk", price$: observable("1.99") },
@@ -37,7 +49,7 @@ const counter = () => component({
         };
 
         const imageSource$ = mapObservable(
-            (hard) => hard ? "KashaHard.gif" : "Kasha.png", 
+            (hard) => hard ? "KashaHard.gif" : "Kasha.png",
             dedupObservable(hard$));
 
         return div(
@@ -118,7 +130,7 @@ const exampleRouter = router({
         p(LOREM),
         div(a("Home").att("href", "#"))
     )
-}, {notFoundRoute: "/"});
+}, { notFoundRoute: "/" });
 
 function numberToHexColor(number: number) {
     let hex = (number % 0xffffff).toString(16);
@@ -127,3 +139,4 @@ function numberToHexColor(number: number) {
 }
 
 exampleRouter.mount(document.getElementById('entry')!);
+exampleRouter.activate();

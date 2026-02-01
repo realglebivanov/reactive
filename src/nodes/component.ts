@@ -14,12 +14,12 @@ type ScopedObservables<T> = {
 };
 
 type RenderFn<O1 extends Observables<{}>, O2 extends Observables<{}>, T extends Node> =
-    (observables: ScopedObservables<O1 & O2>) => ReactiveNode<T>;
+    (observables: ScopedObservables<O1> & ScopedObservables<O2>) => ReactiveNode<T>;
 
 type Params<O1 extends Observables<{}>, O2 extends Observables<{}>, T extends Node> = {
     render: RenderFn<O1, O2, T>,
     observables?: () => O1,
-    derivedObservables?: (observables: O1) => O2,
+    derivedObservables?: (observables: ScopedObservables<O1>) => O2,
     cache?: boolean
 };
 
@@ -30,7 +30,7 @@ export const component = <
 >({
     render,
     observables = (() => ({} as O1)),
-    derivedObservables = ((_: O1) => ({} as O2)),
+    derivedObservables = ((_: ScopedObservables<O1>) => ({} as O2)),
     cache = true
 }: Params<O1, O2, T>): ReactiveNode<Comment> => new Component<O1, O2, T>(
     render,
@@ -41,72 +41,54 @@ export const component = <
 
 class Component<O1 extends Observables<{}>, O2 extends Observables<{}>, T extends Node> {
     private node: ReactiveNode<T> | undefined;
-    private observables: ScopedObservables<O1 & O2> | undefined;
+    private observables: ScopedObservables<O1> & ScopedObservables<O2> | undefined;
 
     constructor(
         private render: RenderFn<O1, O2, T>,
         private observableBuilder: () => O1,
-        private derivedObservableBuilder: (observables: O1) => O2,
+        private derivedObservableBuilder: (o: ScopedObservables<O1>) => O2,
         private cache: boolean
     ) { }
 
     toReactiveNode() {
-        const commentNode: Comment = document.createComment('Component');
-
-        return toReactiveNode(commentNode, [{
-            activate: () => this.activate(commentNode),
-            deactivate: () => this.deactivate(commentNode)
+        return toReactiveNode(document.createComment('Component'), [{
+            mount: (parentNode: Node) => {
+                if (this.node === undefined || !this.cache)
+                    this.node = this.render(this.getOrBuildObservables());
+                this.node.mount(parentNode);
+            },
+            activate: () => this.node?.activate(),
+            deactivate: () => {
+                this.node?.deactivate();
+                this.cleanUp();
+            },
+            unmount: () => this.node?.unmount()
         }]);
     }
 
-    private activate(commentNode: Comment) {
-        if (commentNode.parentNode === null)
-            return console.warn("Node wasn't mounted before activation");
-
-        if (this.node === undefined || !this.cache)
-            this.node = this.render(this.getOrBuildObservables());
-
-        commentNode.parentNode.appendChild(this.node);
-        this.node.activate();
-    }
-
-    private deactivate(commentNode: Comment) {
-        if (commentNode.parentNode === null)
-            return console.warn("Node wasn't mounted before deactivation");
-
-        if (this.node === undefined)
-            return console.warn("Node wasn't created before deactivation");
-
-        this.node.deactivate();
-        commentNode.parentNode.removeChild(this.node);
-        this.cleanUp();
-    }
-
     private getOrBuildObservables() {
-        if (this.observables === undefined || !this.cache)
-            return this.observables = this.buildObservables();
+        if (this.observables !== undefined && this.cache)
+            return this.observables;
+
+        const coreObservables = this.toScoped<O1>(this.observableBuilder());
+        const derivedObservables =
+            this.toScoped<O2>(this.derivedObservableBuilder(coreObservables));
+
+        this.observables = Object.assign(coreObservables, derivedObservables);
 
         return this.observables;
     }
 
-    private buildObservables() {
-        const coreObservables = this.observableBuilder();
-        const extraObservables = this.derivedObservableBuilder(coreObservables);
-        const proxyObservables: Partial<ScopedObservables<O1 & O2>> = {};
+    private toScoped<O extends Observables<{}>>(observables: O): ScopedObservables<O> {
+        const scopedObservables: Partial<ScopedObservables<O>> = {};
 
-        for (const key in coreObservables) {
-            const k = key as keyof O1;
-            const v = coreObservables[k] as any;
-            proxyObservables[k] = scopedObservable(v) as any;
+        for (const key in observables) {
+            const k = key as keyof O;
+            const v = observables[k] as any;
+            scopedObservables[k] = scopedObservable(v) as any;
         }
 
-        for (const key in extraObservables) {
-            const k = key as keyof O2;
-            const v = extraObservables[k] as any;
-            proxyObservables[k] = scopedObservable(v) as any;
-        }
-
-        return proxyObservables as ScopedObservables<O1 & O2>;
+        return scopedObservables as ScopedObservables<O>;
     }
 
     private cleanUp() {

@@ -1,7 +1,8 @@
-import type { ReactiveNode } from "./nodes";
+import { toReactiveNode, type ReactiveNode } from "./nodes";
+import { microtaskRunner } from "./task";
 
-type RouteKey<T> = keyof T & string;
-type Route<T extends RouteCollection<Node>> = T[keyof T];
+type RouteKey<T extends RouteCollection<Node>> = keyof T & string;
+type Route<T extends RouteCollection<Node>> = T[RouteKey<T>];
 type RouteCollection<N extends Node> = Record<string, ReactiveNode<N>>;
 type RouterOpts<T extends RouteCollection<Node>> = {
     notFoundRoute: RouteKey<T>;
@@ -9,52 +10,60 @@ type RouterOpts<T extends RouteCollection<Node>> = {
 
 export const router = <
     T extends RouteCollection<Node>
->(routes: T, opts: RouterOpts<T>) => new Router<T>(routes, opts);
+>(routes: T, opts: RouterOpts<T>): ReactiveNode<Comment> => 
+    new Router<T>(routes, opts).toReactiveNode();
 
 class Router<T extends RouteCollection<Node>> {
-    private parent: HTMLElement | undefined = undefined;
-    private currentRoute: Route<T> | undefined = undefined;
+    private anchor: Comment | undefined;
+    private currentRoute: Route<T> | undefined;
     private hashChangeListener = () => this.syncHash();
 
     constructor(
-        private routes: T, 
+        private routes: T,
         private opts: RouterOpts<T>
     ) { }
 
-    mount(parent: HTMLElement) {
-        if (this.parent !== undefined)
-            return console.warn("Router is already mounted");
-        this.parent = parent;
-        window.addEventListener("hashchange", this.hashChangeListener);
-        this.syncHash();
-    }
+    toReactiveNode() {
+        const anchor = document.createComment('Router');
 
-    unmount() {
-        this.currentRoute?.deactivate();
-        if (this.currentRoute !== undefined)
-            this.parent?.removeChild(this.currentRoute);
-        this.parent = undefined;
-        this.currentRoute = undefined;
-        window.removeEventListener("hashchange", this.hashChangeListener);
+        return toReactiveNode(anchor, [{
+            mount: (parentNode: HTMLElement) => {
+                if (this.anchor !== undefined)
+                    return console.warn("Router is already active");
+                this.anchor = anchor;
+                parentNode.appendChild(anchor);
+            },
+            activate: () => {
+                this.syncHash();
+                window.addEventListener("hashchange", this.hashChangeListener);
+            },
+            deactivate: () => {
+                window.removeEventListener("hashchange", this.hashChangeListener);
+                this.currentRoute?.deactivate();         
+            },
+            unmount: () => {
+                this.currentRoute?.unmount();
+                this.currentRoute = undefined;  
+                anchor.remove();
+            }
+        }]);
     }
 
     private syncHash() {
         const newRoute = this.getNewRoute();
-        if (newRoute === this.currentRoute) return;
-        if (newRoute === undefined) return;
+
+        if (newRoute === this.currentRoute || newRoute === undefined) return;
 
         this.currentRoute?.deactivate();
-        this.replaceRoute(newRoute);
-        newRoute.activate();
+        this.currentRoute?.unmount();
         this.currentRoute = newRoute;
-    }
 
-    private replaceRoute(newRoute: Route<T>) {
-        if (this.currentRoute === undefined) {
-            this.parent?.appendChild(newRoute);
-        } else {
-            this.parent?.replaceChild(newRoute, this.currentRoute);
-        }
+        microtaskRunner(() => {
+            const parentElement = this.anchor?.parentElement;
+            if (parentElement === null || parentElement === undefined) return;
+            newRoute.mount(parentElement);
+            newRoute.activate();
+        });
     }
 
     private getNewRoute(): Route<T> | undefined {
@@ -67,7 +76,7 @@ class Router<T extends RouteCollection<Node>> {
         return this.routes[routeKey];
     }
 
-    private isRouteKey(key: string): key is RouteKey<T> { 
+    private isRouteKey(key: string): key is RouteKey<T> {
         return key in this.routes;
     }
 }

@@ -11,7 +11,7 @@
     "module": "esnext",
     "target": "es2015",
     "types": [],
-    "lib": ["dom", "ES2020"],
+    "lib": ["dom", "ES2023"],
 
     // Other Outputs
     "sourceMap": true,

@@ -1,9 +1,9 @@
 import type { Observable, Observer, Updatable, UpdateFn } from ".";
-import { microtaskRunner, type TaskRunner } from "../task";
+import { dedupMicrotaskRunner, type TaskRunner } from "../task";
 
 export const observable = <T>(
     value: T,
-    opts: { microtaskRunner: TaskRunner } = { microtaskRunner }
+    opts: { microtaskRunner: TaskRunner } = { microtaskRunner: dedupMicrotaskRunner }
 ) => new ValueObservable(value, opts);
 
 class ValueObservable<T> implements Observable<T>, Updatable<T> {
@@ -27,7 +27,7 @@ class ValueObservable<T> implements Observable<T>, Updatable<T> {
     }
     subscribeInit(id: symbol, observer: Observer<T>) {
         this.subscribe(id, observer);
-        this.opts.microtaskRunner(() => this.notify(id, observer));
+        this.notify(id, observer);
     }
     update(updateFn: UpdateFn<T>) {
         this.value = updateFn(this.value);

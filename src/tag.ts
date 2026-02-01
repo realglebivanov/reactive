@@ -1,6 +1,6 @@
 import {
+    reactiveTextNode,
     toTagReactiveNode,
-    type Lifecycle,
     type ReactiveNode,
     type TagReactiveNode
 } from './nodes/reactive';
@@ -12,20 +12,36 @@ export type InputChild<
 
 export const tag = <
     K extends keyof HTMLElementTagNameMap
->(name: K, ...children: InputChild<Node>[]): TagReactiveNode<K> => {
+>(name: K, ...inputChildren: InputChild<Node>[]): TagReactiveNode<K> => {
     const node = document.createElement(name);
-    const handlers: Lifecycle[] = [];
+    const children: ReactiveNode<Node>[] = [];
 
-    for (const child of children) {
+    for (const child of inputChildren) {
         if (typeof (child) === 'string') {
-            node.appendChild(document.createTextNode(child));
+            children.push(reactiveTextNode(child));
         } else if (child instanceof Node) {
-            handlers.push(child);
-            node.appendChild(child);
+            children.push(child);
+        } else {
+            throw new Error('Unsupported child type');
         }
     }
 
-    return toTagReactiveNode<K>(node, handlers);
+    return toTagReactiveNode<K>(node, [{
+        mount: (parentNode: Node) => {
+            parentNode.appendChild(node);
+            for (const child of children) child.mount(node);
+        },
+        activate: () => {
+            for (const child of children) child.activate();
+        },
+        deactivate: () => {
+            for (const child of children) child.deactivate();
+        },
+        unmount: () => {
+            for (const child of children) child.unmount();
+            node.remove();
+        }
+    }]);
 }
 
 export const tags = {

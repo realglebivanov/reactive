@@ -1,9 +1,5 @@
+import { buildLifecycleHooks, type Lifecycle } from '../lifecycle';
 import type { Observable } from '../observables';
-
-export interface Lifecycle {
-    activate: () => void,
-    deactivate: () => void,
-}
 
 export type ReactiveNode<T extends Node> = Lifecycle & T & ReactiveNodeSetters<T>;
 
@@ -27,7 +23,7 @@ export const toTagReactiveNode = <K extends keyof HTMLElementTagNameMap>(
     const internalHandlers = [...handlers];
     const tagNodeSetters = buildTagNodeSetters<K>(internalHandlers);
     const nodeSetters = buildNodeSetters(internalHandlers);
-    const hooks = buildHooks(internalHandlers);
+    const hooks = buildLifecycleHooks(internalHandlers);
 
     return Object.assign(node, nodeSetters, tagNodeSetters, hooks);
 };
@@ -38,10 +34,22 @@ export const toReactiveNode = <T extends Node>(
 ): ReactiveNode<T> => {
     const internalHandlers = [...handlers];
     const nodeSetters = buildNodeSetters(internalHandlers);
-    const hooks = buildHooks(internalHandlers);
+    const hooks = buildLifecycleHooks(internalHandlers);
 
     return Object.assign(node, nodeSetters, hooks);
 };
+
+export const reactiveTextNode = (text: string) => {
+    const textNode = document.createTextNode(text);
+    const hooks = [{
+        mount: (parentNode: Node) => parentNode.appendChild(textNode),
+        activate: () => undefined,
+        deactivate: () => undefined,
+        unmount: () => textNode.remove()
+    }];
+
+    return toReactiveNode(textNode, hooks);
+}
 
 const buildTagNodeSetters = <K extends keyof HTMLElementTagNameMap>(
     handlers: Lifecycle[]
@@ -58,10 +66,12 @@ const buildTagNodeSetters = <K extends keyof HTMLElementTagNameMap>(
         const subscriberId = Symbol(`Attribute: ${name}`)
 
         handlers.push({
+            mount: (_: Node) => undefined,
             activate: () => value$.subscribeInit(
                 subscriberId,
                 (value: string) => this.setAttribute(name, value)),
-            deactivate: () => value$.unsubscribe(subscriberId)
+            deactivate: () => value$.unsubscribe(subscriberId),
+            unmount: () => undefined
         });
 
         return this;
@@ -76,25 +86,12 @@ const buildNodeSetters = <T extends Node>(
         callback: EventListenerOrEventListenerObject
     ) {
         handlers.push({
+            mount: (_: Node) => undefined,
             activate: () => this.addEventListener('click', callback),
-            deactivate: () => this.removeEventListener('click', callback)
+            deactivate: () => this.removeEventListener('click', callback),
+            unmount: () => undefined
         });
+
         return this;
     }
 });
-
-const buildHooks = (handlers: Lifecycle[]): Lifecycle => {
-    let active = false;
-    return {
-        activate: () => {
-            if (active) return;
-            active = true;
-            for (const handler of handlers) handler.activate();
-        },
-        deactivate: () => {
-            if (!active) return;
-            active = false;
-            for (const handler of handlers) handler.deactivate()
-        },
-    };
-};

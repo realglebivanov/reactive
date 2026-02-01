@@ -4,17 +4,9 @@ import { toReactiveNode, type ReactiveNode } from "./reactive";
 type Key = string | number | boolean | symbol;
 type BuildFn<N extends Node, T> = ((key: Key, value: T) => ReactiveNode<N>);
 type KeyFn<T> = ((key: Key, value: T) => Key);
-
-type ItReactiveNode<N extends Node, T> = ReactiveNode<N> & {
-    [generationId]: number | undefined,
-    [valueId]: T | undefined
-};
 type Source<T> = Array<T> | Map<Key, T>;
 
-const generationId = Symbol('genid');
-const valueId = Symbol('valid');
-
-export const iterable = <T, N extends Node>(
+export const iterable = <T, N extends ReactiveNode<Node>>(
     { it$, buildFn, keyFn }: {
         it$: Observable<Source<T>>,
         buildFn: BuildFn<N, T>,
@@ -26,9 +18,9 @@ export const iterable = <T, N extends Node>(
     keyFn
 ).toReactiveNode();
 
-class Iterable<T, N extends Node> {
+class Iterable<T, N extends ReactiveNode<Node>> {
     private readonly id = Symbol('Iterable');
-    private currentNodes = new Map<Key, ItReactiveNode<N, T>>();
+    private currentItems = new Map<Key, ReactiveItem<T, N>>();
     private nodeGeneration = 0;
 
     constructor(
@@ -38,86 +30,104 @@ class Iterable<T, N extends Node> {
     ) { }
 
     toReactiveNode() {
-        const commentNode = document.createComment('Iterable');
+        const anchor = document.createComment('Iterable');
+        const updateFn =
+            (newValue: Source<T>) => this.updateNodes(anchor, newValue);
 
-        const updateNodeFn = (newValue: Source<T>) => {
-            if (commentNode.parentNode === null)
-                return console.warn("Node wasn't mounted before update");
-
-            this.updateNodes(commentNode.parentNode, newValue);
-        };
-
-        return toReactiveNode(commentNode, [{
-            activate: () => this.it$.subscribeInit(this.id, updateNodeFn),
+        return toReactiveNode(anchor, [{
+            mount: (parentNode: Node) => parentNode.appendChild(anchor),
+            activate: () => this.it$.subscribeInit(this.id, updateFn),
             deactivate: () => {
-                if (commentNode.parentNode === null)
-                    return console.warn("Node wasn't mounted before deactivation");
-
-                this.deactivateNodes(commentNode.parentNode);
+                this.it$.unsubscribe(this.id);
+                for (const item of this.currentItems.values())
+                    item.deactivate();
+            },
+            unmount: () => {
+                for (const item of this.currentItems.values())
+                    item.unmount();
+                anchor.remove();
+                this.currentItems.clear();
             }
         }]);
     }
 
-    private deactivateNodes(parentNode: Node) {
-        this.it$.unsubscribe(this.id);
-        for (const node of this.currentNodes.values()) {
-            node.deactivate();
-            parentNode.removeChild(node);
-        }
-        this.currentNodes.clear();
-    }
-
-    private updateNodes(parentNode: Node, newValue: Source<T>) {
+    private updateNodes(anchor: Node, newValue: Source<T>) {
         this.nodeGeneration++;
-        let refNode = null;
+        let refItem = null;
 
         for (const [k, value] of newValue.entries()) {
             const key = this.keyFn(k, value);
-            const node = this.rebuildOrCreateNode(parentNode, key, value);
+            const item = this.rebuildOrCreate(anchor, key, value);
 
-            this.adjustNode(node, parentNode, refNode);
+            item.mount(refItem);
+            item.activate(this.nodeGeneration);
 
-            node[generationId] = this.nodeGeneration;
-            refNode = node.nextSibling;
+            refItem = item;
         }
 
-        this.removeStaleNodes(parentNode);
+        this.removeStaleNodes();
     }
 
-    private rebuildOrCreateNode(parentNode: Node, key: Key, value: T) {
-        const node = this.currentNodes.get(key);
-        if (node === undefined) return this.createNode(key, value);
-        if (node[valueId] === value) return node;
+    private rebuildOrCreate(anchor: Node, key: Key, value: T) {
+        const item = this.currentItems.get(key);
+        if (item === undefined) return this.createItem(anchor, key, value);
+        if (item.value === value) return item;
 
-        node.deactivate();
-        parentNode.removeChild(node);
+        item.deactivate();
+        item.unmount();
 
-        return this.createNode(key, value);
+        return this.createItem(anchor, key, value);
     }
 
-    private createNode(key: Key, value: T) {
-        const newNode = this.buildFn(key, value) as ItReactiveNode<N, T>;
-        this.currentNodes.set(key, newNode);
-        newNode[valueId] = value;
-
-        return newNode;
+    private createItem(anchor: Node, key: Key, value: T) {
+        const newNode = this.buildFn(key, value);
+        const item = new ReactiveItem(anchor, value, newNode);
+        this.currentItems.set(key, item);
+        return item;
     }
 
-    private adjustNode(node: ItReactiveNode<N, T>, parentNode: Node, refNode: Node | null) {
-        if (node.nextSibling == null || !node.nextSibling.isSameNode(refNode)) {
-            parentNode.insertBefore(node, refNode);
-            if (node[generationId] === undefined) node.activate();
-        }
-
-        return node;
-    };
-
-    private removeStaleNodes(parentNode: Node) {
-        for (const [key, node] of this.currentNodes.entries()) {
-            if (node[generationId] === this.nodeGeneration) continue;
+    private removeStaleNodes() {
+        for (const [key, node] of this.currentItems.entries()) {
+            if (node.generationId === this.nodeGeneration) continue;
             node.deactivate();
-            parentNode.removeChild(node);
-            this.currentNodes.delete(key);
+            node.unmount();
+            this.currentItems.delete(key);
         }
+    }
+}
+
+class ReactiveItem<T, N extends ReactiveNode<Node>> {
+    public generationId?: number;
+
+    constructor(
+        private anchor: Node,
+        public value: T,
+        public node: N
+    ) { }
+
+    mount(refItem: ReactiveItem<T, N> | null) {
+        const parentNode = this.anchor.parentNode;
+
+        if (parentNode === null) return;
+        if (this.node.parentNode === null) this.node.mount(parentNode);
+
+        if (refItem === null)
+            parentNode.insertBefore(this.node, null);
+        else
+            parentNode.insertBefore(this.node, refItem.node.nextSibling);
+    }
+
+    activate(generationId: number): void {
+        if (this.generationId === undefined)
+            this.node.activate();
+        this.generationId = generationId;
+    }
+
+    deactivate(): void {
+        this.node.deactivate();
+    }
+
+    unmount(): void {
+        this.node.unmount();
     }
 }
