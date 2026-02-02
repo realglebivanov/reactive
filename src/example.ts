@@ -59,7 +59,7 @@ const counter = () => component({
                 then: "Rock hard, baby",
                 otherwise: "Wood needed"
             })),
-            div(span(template('Counter: ?', mapObservable((x) => x.toString(16), count$)))),
+            div(span(template`Counter: ${mapObservable((x) => x.toString(16), count$)}`)),
             div(img("Kasha.png").att$("src", imageSource$).clk(onClick))
         );
     }
@@ -95,8 +95,7 @@ const shoppingList = () => component({
         ul(
             iterable({
                 it$: shoppingItems$,
-                buildFn: (_, item) =>
-                    li(span(template(`${item.name} - $?`, item.price$))),
+                buildFn: (_, item) => li(span(template`${item.name} - ${item.price$}`)),
                 keyFn: (_, item) => item.name,
             })
         )

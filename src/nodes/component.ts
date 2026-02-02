@@ -60,9 +60,17 @@ class Component<O1 extends Observables<{}>, O2 extends Observables<{}>, T extend
             activate: () => this.node?.activate(),
             deactivate: () => {
                 this.node?.deactivate();
-                this.cleanUp();
+                if (this.observables === undefined) return;
+                for (const key in this.observables)
+                    if (this.observables.hasOwnProperty(key))
+                        this.observables[key as keyof O1 & O2].unsubscribeAll();
             },
-            unmount: () => this.node?.unmount()
+            unmount: () => {
+                this.node?.unmount();
+                if (this.cache) return;
+                this.node = undefined;
+                this.observables = undefined;
+            }
         }]);
     }
 
@@ -83,22 +91,13 @@ class Component<O1 extends Observables<{}>, O2 extends Observables<{}>, T extend
         const scopedObservables: Partial<ScopedObservables<O>> = {};
 
         for (const key in observables) {
+            if (!observables.hasOwnProperty(key)) continue;
+
             const k = key as keyof O;
             const v = observables[k] as any;
             scopedObservables[k] = scopedObservable(v) as any;
         }
 
         return scopedObservables as ScopedObservables<O>;
-    }
-
-    private cleanUp() {
-        if (this.cache) return;
-        this.node = undefined;
-        if (this.observables === undefined) return;
-
-        for (const key in this.observables)
-            this.observables[key as (keyof O1 & keyof O2)].unsubscribeAll();
-
-        this.observables = undefined;
     }
 }

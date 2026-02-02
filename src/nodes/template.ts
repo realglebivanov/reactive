@@ -1,24 +1,26 @@
 import type { Observable } from "../observables";
 import { toReactiveNode } from "./reactive";
 
-// TODO: check at compile time that 
-// substitution count in `template` matches `observables` length
-
 type PartialTextNode = {
+    staticNodes: Text[],
+    dynamicNode: {
+        node: Text,
         observerId: symbol,
-        staticNode: Text,
-        dynamicNode: Text | undefined
-    };
+        observable: Observable<string>
+    } | undefined
+};
+
+type Hole = Observable<string> | string;
 
 export const template = (
-    template: string,
-    ...observables: Observable<string>[]
-) => new Template(template, observables).toReactiveNode();
+    strings: TemplateStringsArray,
+    ...holes: Hole[]
+) => new Template(strings, holes).toReactiveNode();
 
 class Template {
     constructor(
-        private template: string, 
-        private observables: Observable<string>[]
+        private strings: TemplateStringsArray,
+        private holes: Hole[]
     ) { }
 
     toReactiveNode() {
@@ -28,51 +30,66 @@ class Template {
         return toReactiveNode(commentNode, [{
             mount: (parentNode: Node) => this.appendNodes(parentNode, nodes),
             activate: () => {
-                for (const [i, observable] of this.observables.entries())
-                    this.attachObservable(nodes[i], observable);
+                for (const node of nodes) this.attachObservable(node);
             },
             deactivate: () => {
-                for (const [i, observable] of this.observables.entries())
-                    this.detachObservable(nodes[i], observable);
+                for (const node of nodes) this.detachObservable(node);
             },
             unmount: () => this.removeNodes(nodes),
         }]);
     }
 
     private buildNodes() {
-        const staticParts = this.template.split(/(?<!@)\?/)
-            .map((staticPart) => staticPart.replace('@?', '?'));
+        return this.strings.map((staticPart, i) => {
+            const hole = this.holes[i];
+            const partialTextNode: PartialTextNode = {
+                staticNodes: [document.createTextNode(staticPart)],
+                dynamicNode: undefined
+            };
 
-        return staticParts.map((staticPart, i) => ({
-            observerId: Symbol(`Template${i}`),
-            staticNode: document.createTextNode(staticPart),
-            dynamicNode: i + 1 in staticParts ? document.createTextNode('') : undefined
-        }));
+            if (typeof hole === 'string') {
+                partialTextNode.staticNodes.push(document.createTextNode(hole));
+            } else if (typeof hole === 'object' && hole !== null) {
+                partialTextNode.dynamicNode = {
+                    node: document.createTextNode(''),
+                    observerId: Symbol(`Template${i}`),
+                    observable: hole
+                };
+            }
+
+            return partialTextNode;
+        });
     }
 
     private appendNodes(parentNode: Node, nodes: PartialTextNode[]) {
-        for (const { staticNode, dynamicNode } of nodes) {
-            parentNode.appendChild(staticNode);
-            if (dynamicNode !== undefined) parentNode.appendChild(dynamicNode);
+        for (const { staticNodes, dynamicNode } of nodes) {
+            for (const staticNode of staticNodes)
+                parentNode.appendChild(staticNode);
+            if (dynamicNode !== undefined) 
+                parentNode.appendChild(dynamicNode.node);
         }
     };
 
-    private attachObservable(node: PartialTextNode | undefined, observable: Observable<string>) {
-        if (node === undefined) return;
-        if (node.dynamicNode === undefined) return;
-        observable.subscribeInit(
-            node.observerId, (value) => (node.dynamicNode as Text).data = value);
+    private attachObservable(partialTextNode: PartialTextNode) {
+        if (partialTextNode === undefined) return;
+        if (partialTextNode.dynamicNode === undefined) return;
+
+        const { node, observerId, observable } = partialTextNode.dynamicNode;
+
+        observable.subscribeInit(observerId, (value) => node.data = value);
     };
 
     private removeNodes(nodes: PartialTextNode[]) {
-        for (const { staticNode, dynamicNode } of nodes) {
-            staticNode.remove()
-            if (dynamicNode !== undefined) dynamicNode.remove();
+        for (const { staticNodes, dynamicNode } of nodes) {
+            for (const staticNode of staticNodes)
+                staticNode.remove();
+            if (dynamicNode !== undefined) dynamicNode.node.remove();
         }
     };
 
-    private detachObservable(node: PartialTextNode | undefined, observable: Observable<string>) {
-        if (node === undefined) return;
-        observable.unsubscribe(node.observerId);
+    private detachObservable(node: PartialTextNode) {
+        if (node.dynamicNode === undefined) return;
+        const { observerId, observable } = node.dynamicNode;
+        observable.unsubscribe(observerId);
     };
 }
