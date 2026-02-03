@@ -18,18 +18,6 @@ const LOREM = `
 
 const { a, p, h1, h2, div, span, button, ul, li, img, input } = tags;
 
-(window as any).upd = () => {
-    shoppingItems$.update((items) => {
-        items.unshift({
-            name: "bread", price$: observable("2.49")
-        });
-        items.push({
-            name: "butter", price$: observable("3.49")
-        });
-        return items;
-    });
-};
-
 const shoppingItems$ = observable([
     { name: "milk", price$: observable("1.99") },
     { name: "sour cream", price$: observable("2.99") },
@@ -37,20 +25,26 @@ const shoppingItems$ = observable([
 ]);
 
 const counter = () => component({
+    cache: true,
+    props: { counter: "Counter" },
     observables: () => ({
         count$: observable(0),
         hard$: observable(false),
         veryHard$: observable(true)
     }),
-    render: ({ count$, hard$, veryHard$ }) => {
-        const onClick = function () {
+    derivedObservables: ({
+        count$, hard$
+    }) => ({
+        imageSource$: mapObservable(
+            (hard) => hard ? "KashaHard.gif" : "Kasha.png",
+            dedupObservable(hard$)),
+        hexCounter$: mapObservable((x) => x.toString(2), count$)
+    }),
+    render: function ({ count$, hard$, veryHard$, imageSource$, hexCounter$ }) {
+        const onClick = () => {
             count$.update((count) => count + 1);
             hard$.update((hard) => !hard);
         };
-
-        const imageSource$ = mapObservable(
-            (hard) => hard ? "KashaHard.gif" : "Kasha.png",
-            dedupObservable(hard$));
 
         return div(
             h2(cond({
@@ -59,7 +53,7 @@ const counter = () => component({
                 then: "Rock hard, baby",
                 otherwise: "Wood needed"
             })),
-            div(span(template`Counter: ${mapObservable((x) => x.toString(16), count$)}`)),
+            div(span(template`${this.props.counter}: ${hexCounter$}`)),
             div(img("Kasha.png").att$("src", imageSource$).clk(onClick))
         );
     }
@@ -90,7 +84,8 @@ const shoppingForm = () => component({
 });
 
 const shoppingList = () => component({
-    render: () => div(
+    observables: () => ({ shoppingItems$ }),
+    render: ({ shoppingItems$ }) => div(
         h2("Shopping items"),
         ul(
             iterable({

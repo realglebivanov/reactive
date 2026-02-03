@@ -1,8 +1,8 @@
 import type { Observable, Observer, Updatable, UpdateFn } from ".";
 
-export const scopedObservable = <T>(
-    innerObservable: Observable<T>
-) => new ScopedObservable(innerObservable);
+export const scopedObservable = <T extends Observable<any>>(
+    innerObservable: T
+) => new ScopedObservable<T>(innerObservable);
 
 type Value<O extends Observable<any>> =
     O extends Observable<infer T> ? T : never;
