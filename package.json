@@ -1,7 +1,7 @@
 {
-  "name": "oatmeal",
-  "version": "1.0.0",
-  "description": "![KashaHard](KashaHard.gif)",
+  "name": "@realglebivanov/reactive",
+  "version": "1.0.2",
+  "description": "A simple and permissive observable-driven UI toolkit",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -12,6 +12,16 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "keywords": [
+    "reactive",
+    "observable",
+    "ui",
+    "toolkit",
+    "framework",
+    "typescript",
+    "no-deps",
+    "no-dependencies"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsup",
@@ -21,16 +31,20 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/realglebivanov/grecha.js.git"
+    "url": "git+https://github.com/realglebivanov/reactive.git"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "realglebivanov <realglebivanov@gmail.com>",
+  "license": "MIT",
   "bugs": {
-    "url": "https://github.com/realglebivanov/grecha.js/issues"
+    "url": "https://github.com/realglebivanov/reactive/issues"
   },
-  "homepage": "https://github.com/realglebivanov/grecha.js#readme",
+  "homepage": "https://github.com/realglebivanov/reactive#readme",
   "devDependencies": {
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"
-  }
+  },
+  "files": [
+    "dist/index.js",
+    "dist/index.d.ts"
+  ]
 }

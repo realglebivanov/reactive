@@ -10,6 +10,8 @@ import {
     dedupObservable
 } from ".";
 
+import { ReactiveArray } from ".";
+
 const LOREM = `
       Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
       Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
@@ -18,7 +20,7 @@ const LOREM = `
 
 const { a, p, h1, h2, div, span, button, ul, li, img, input } = tags;
 
-const shoppingItems$ = observable([
+const shoppingItems = new ReactiveArray([
     { name: "milk", price$: observable("1.99") },
     { name: "sour cream", price$: observable("2.99") },
     { name: "cheese", price$: observable("0.99") }
@@ -32,9 +34,7 @@ const counter = () => component({
         hard$: observable(false),
         veryHard$: observable(true)
     }),
-    derivedObservables: ({
-        count$, hard$
-    }) => ({
+    derivedObservables: ({ count$, hard$ }) => ({
         imageSource$: mapObservable(
             (hard) => hard ? "KashaHard.gif" : "Kasha.png",
             dedupObservable(hard$)),
@@ -69,12 +69,9 @@ const shoppingForm = () => component({
 
             if (itemName.value == "" || itemPrice.value == "") return;
 
-            shoppingItems$.update((items) => {
-                items.push({
-                    name: itemName.value,
-                    price$: observable(itemPrice.value)
-                });
-                return items;
+            shoppingItems.push({
+                name: itemName.value,
+                price$: observable(itemPrice.value)
             });
 
             itemName.value = "";
@@ -84,7 +81,7 @@ const shoppingForm = () => component({
 });
 
 const shoppingList = () => component({
-    observables: () => ({ shoppingItems$ }),
+    observables: () => ({ shoppingItems$: shoppingItems.observable$ }),
     render: ({ shoppingItems$ }) => div(
         h2("Shopping items"),
         ul(

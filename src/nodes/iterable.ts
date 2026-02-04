@@ -1,133 +1,84 @@
-import type { Observable } from "../observables";
+import { mapObservable, type Observable } from "../observables";
 import { toReactiveNode, type ReactiveNode } from "./reactive";
+import {
+    ReactiveItemCollection,
+    type BuildFn,
+    type Collection,
+    type Key,
+    type KeyFn
+} from "./iterable/collection";
 
-type Key = string | number | boolean | symbol;
-type BuildFn<N extends Node, T> = ((key: Key, value: T) => ReactiveNode<N>);
-type KeyFn<T> = ((key: Key, value: T) => Key);
-type Source<T> = Array<T> | Map<Key, T>;
+type Source<T> = Collection<T> | Event<T>;
 
-export const iterable = <T, N extends ReactiveNode<Node>>(
+export type Event<T> =
+    { type: "replace", items: Collection<T> } |
+    { type: "remove", items: Collection<T> } |
+    { type: "append", items: Collection<T> } |
+    { type: "replaceKeys", items: Collection<T> };
+
+export const iterable = <K extends Key, T, N extends ReactiveNode<Node>>(
     { it$, buildFn, keyFn }: {
         it$: Observable<Source<T>>,
         buildFn: BuildFn<N, T>,
-        keyFn: KeyFn<T>
+        keyFn: KeyFn<K, T>
     }
-) => new Iterable<T, N>(
+) => new Iterable<K, T, N>(
     it$,
     buildFn,
     keyFn
 ).toReactiveNode();
 
-class Iterable<T, N extends ReactiveNode<Node>> {
+class Iterable<K extends Key, T, N extends ReactiveNode<Node>> {
     private readonly id = Symbol('Iterable');
-    private currentItems = new Map<Key, ReactiveItem<T, N>>();
-    private nodeGeneration = 0;
+    private it$: Observable<Event<T>>;
+    private items: ReactiveItemCollection<K, T, N>;
 
     constructor(
-        private it$: Observable<Source<T>>,
-        private buildFn: BuildFn<N, T>,
-        private keyFn: KeyFn<T>
-    ) { }
+        it$: Observable<Source<T>>,
+        buildFn: BuildFn<N, T>,
+        keyFn: KeyFn<K, T>
+    ) {
+        this.it$ = this.toEventObservable(it$);
+        this.items = new ReactiveItemCollection(keyFn, buildFn);
+    }
 
     toReactiveNode() {
         const anchor = document.createComment('Iterable');
-        const updateFn =
-            (newValue: Source<T>) => this.updateNodes(anchor, newValue);
+        const updateFn = (event: Event<T>) => {
+            switch (event.type) {
+                case "replace":
+                    return this.items.replace(anchor, event.items);
+                case "replaceKeys":
+                    return this.items.replaceKeys(anchor, event.items);
+                case "append":
+                    return this.items.append(anchor, event.items);
+                case "remove":
+                    return this.items.remove(event.items);
+                default:
+                    return console.warn('Unsupported event type', event);    
+            }
+        };
 
         return toReactiveNode(anchor, [{
             mount: (parentNode: Node) => parentNode.appendChild(anchor),
             activate: () => this.it$.subscribeInit(this.id, updateFn),
             deactivate: () => {
                 this.it$.unsubscribe(this.id);
-                for (const item of this.currentItems.values())
-                    item.deactivate();
+                this.items.deactivate();
             },
             unmount: () => {
-                for (const item of this.currentItems.values())
-                    item.unmount();
+                this.items.unmount();
                 anchor.remove();
-                this.currentItems.clear();
             }
         }]);
     }
 
-    private updateNodes(anchor: Node, newValue: Source<T>) {
-        this.nodeGeneration++;
-        let refItem = null;
-
-        for (const [k, value] of newValue.entries()) {
-            const key = this.keyFn(k, value);
-            const item = this.rebuildOrCreate(anchor, key, value);
-
-            item.mount(refItem);
-            item.activate(this.nodeGeneration);
-
-            refItem = item;
-        }
-
-        this.removeStaleNodes();
-    }
-
-    private rebuildOrCreate(anchor: Node, key: Key, value: T) {
-        const item = this.currentItems.get(key);
-        if (item === undefined) return this.createItem(anchor, key, value);
-        if (item.value === value) return item;
-
-        item.deactivate();
-        item.unmount();
-
-        return this.createItem(anchor, key, value);
-    }
-
-    private createItem(anchor: Node, key: Key, value: T) {
-        const newNode = this.buildFn(key, value);
-        const item = new ReactiveItem(anchor, value, newNode);
-        this.currentItems.set(key, item);
-        return item;
-    }
-
-    private removeStaleNodes() {
-        for (const [key, node] of this.currentItems.entries()) {
-            if (node.generationId === this.nodeGeneration) continue;
-            node.deactivate();
-            node.unmount();
-            this.currentItems.delete(key);
-        }
-    }
-}
-
-class ReactiveItem<T, N extends ReactiveNode<Node>> {
-    public generationId?: number;
-
-    constructor(
-        private anchor: Node,
-        public value: T,
-        public node: N
-    ) { }
-
-    mount(refItem: ReactiveItem<T, N> | null) {
-        const parentNode = this.anchor.parentNode;
-
-        if (parentNode === null) return;
-        if (this.node.parentNode === null) this.node.mount(parentNode);
-
-        if (refItem === null)
-            parentNode.insertBefore(this.node, null);
-        else
-            parentNode.insertBefore(this.node, refItem.node.nextSibling);
-    }
-
-    activate(generationId: number): void {
-        if (this.generationId === undefined)
-            this.node.activate();
-        this.generationId = generationId;
-    }
-
-    deactivate(): void {
-        this.node.deactivate();
-    }
-
-    unmount(): void {
-        this.node.unmount();
+    private toEventObservable(it$: Observable<Source<T>>): Observable<Event<T>> {
+        return mapObservable((source: Source<T>) => {
+            if (source instanceof Array || source instanceof Map) {
+                return { type: "replace", items: source };
+            }
+            return source;
+        }, it$)
     }
 }

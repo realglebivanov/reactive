@@ -4,7 +4,7 @@ import { dedupMicrotaskRunner, type TaskRunner } from "../task";
 export const observable = <T>(
     value: T,
     opts: { microtaskRunner: TaskRunner } = { microtaskRunner: dedupMicrotaskRunner }
-) => new ValueObservable(value, opts);
+): ValueObservable<T> => new ValueObservable(value, opts);
 
 class ValueObservable<T> implements Observable<T>, Updatable<T> {
     private readonly observers = new Map<symbol, Observer<T>>();

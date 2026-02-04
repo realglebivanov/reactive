@@ -15,6 +15,8 @@ export default defineConfig({
   minify: true,
   sourcemap: true,
   clean: true,
+  bundle: true,
+  splitting: false,
 
   treeshake: true,
   publicDir: './public'
