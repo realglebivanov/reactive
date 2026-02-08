@@ -1,5 +1,5 @@
 import { mapObservable, type Observable } from "../observables";
-import { toReactiveNode, type ReactiveNode } from "./reactive";
+import { toReactiveNode, type ReactiveNode } from "../reactive/extensions";
 import {
     ReactiveItemCollection,
     type BuildFn,
@@ -22,7 +22,7 @@ export const iterable = <K extends Key, T, N extends ReactiveNode<Node>>(
         buildFn: BuildFn<N, T>,
         keyFn: KeyFn<K, T>
     }
-) => new Iterable<K, T, N>(
+): ReactiveNode<Comment> => new Iterable<K, T, N>(
     it$,
     buildFn,
     keyFn

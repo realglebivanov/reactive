@@ -1,9 +1,9 @@
+import { reactiveTextNode } from './nodes';
 import {
-    reactiveTextNode,
     toTagReactiveNode,
     type ReactiveNode,
     type TagReactiveNode
-} from './nodes/reactive';
+} from './reactive/extensions';
 
 export type InputChild<
     T extends Node,

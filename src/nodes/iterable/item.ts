@@ -1,4 +1,4 @@
-import type { ReactiveNode } from "../reactive";
+import type { ReactiveNode } from "../../reactive/extensions";
 
 export class ReactiveItem<T, N extends ReactiveNode<Node>> {
     public generationId?: number;

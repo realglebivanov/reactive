@@ -1,5 +1,5 @@
 import type { Observable } from "../observables";
-import { toReactiveNode } from "./reactive";
+import { toReactiveNode } from "../reactive/extensions";
 
 type PartialTextNode = {
     staticNodes: Text[],

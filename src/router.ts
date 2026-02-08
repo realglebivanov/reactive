@@ -1,4 +1,4 @@
-import { toReactiveNode, type ReactiveNode } from "./nodes";
+import { toReactiveNode, type ReactiveNode } from "./reactive";
 import { microtaskRunner } from "./task";
 
 type RouteKey<T extends RouteCollection<Node>> = keyof T & string;

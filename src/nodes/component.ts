@@ -3,7 +3,7 @@ import {
     ScopedObservable,
     type Observable
 } from "../observables";
-import { toReactiveNode, type ReactiveNode } from "./reactive";
+import { toReactiveNode, type ReactiveNode } from "../reactive/extensions";
 
 type Observables = Record<string, Observable<any>>;
 type ScopedObservables<T extends Observables> = {
@@ -64,7 +64,7 @@ class Component<O1 extends Observables, O2 extends Observables, T extends Node, 
                 this.node?.deactivate();
                 if (this.observables === undefined) return;
                 for (const key in this.observables)
-                    this.observables[key as keyof O1 & O2].unsubscribeAll();
+                    this.observables[key]?.unsubscribeAll();
             },
             unmount: () => {
                 this.node?.unmount();

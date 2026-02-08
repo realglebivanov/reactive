@@ -1,5 +1,6 @@
 import { dedupObservable, type Observable } from "../observables";
-import { reactiveTextNode, toReactiveNode, type ReactiveNode } from "./reactive";
+import { toReactiveNode, type ReactiveNode } from "../reactive/extensions";
+import { reactiveTextNode } from "./reactive";
 
 type ReactiveNodeBuilder<T extends Node> = (() => ReactiveNode<T>);
 

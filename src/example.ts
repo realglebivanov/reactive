@@ -61,7 +61,7 @@ const counter = () => component({
 
 const shoppingForm = () => component({
     render: () => div(
-        div(span('Name: '), input('text').att('id', 'itemName')),
+        div(span('Name: '), input('text').att('id', 'itemName').class$(observable(''))),
         div(span('Price: '), input('text').att('id', 'itemPrice')),
         button(span('Add')).clk(() => {
             const itemName = document.getElementById('itemName') as HTMLInputElement;

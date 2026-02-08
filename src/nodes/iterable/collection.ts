@@ -1,4 +1,4 @@
-import type { ReactiveNode } from "../reactive";
+import type { ReactiveNode } from "../../reactive/extensions";
 import { ReactiveItem } from "./item";
 
 export type Key = string | number | boolean | symbol;
