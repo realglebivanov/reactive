@@ -6,8 +6,8 @@ type ReactiveNodeBuilder<T extends Node> = (() => ReactiveNode<T>);
 
 type Params<A extends Node, B extends Node> = {
     if$: Observable<boolean>,
-    then: ReactiveNodeBuilder<A> | string,
-    otherwise: ReactiveNodeBuilder<B> | string
+    then?: ReactiveNodeBuilder<A> | string | undefined,
+    otherwise?: ReactiveNodeBuilder<B> | string | undefined
 };
 
 type CurrentNode<A extends Node, B extends Node> =
@@ -27,8 +27,8 @@ class Cond<A extends Node, B extends Node> {
 
     constructor(
         private if$: Observable<boolean>,
-        private then: ReactiveNodeBuilder<A> | string,
-        private otherwise: ReactiveNodeBuilder<B> | string
+        private then: ReactiveNodeBuilder<A> | string | undefined,
+        private otherwise: ReactiveNodeBuilder<B> | string | undefined
     ) { }
 
     toReactiveNode() {
@@ -61,20 +61,23 @@ class Cond<A extends Node, B extends Node> {
         }
     }
 
-    private buildNode<T extends Node>(node: string | ReactiveNodeBuilder<T>) {
-        if (typeof (node) === 'function')
-            return node();
-        if (typeof (node) === 'string')
-            return reactiveTextNode(node);
+    private buildNode<T extends Node>(node: string | ReactiveNodeBuilder<T> | undefined) {
+        if (typeof (node) === 'function') return node();
+        if (typeof (node) === 'string') return reactiveTextNode(node);
+        if (node === undefined) return undefined;
 
         throw new Error('Then/otherwise should be either string or function');
     }
 
-    private switchNode(anchor: Node, newNode: CurrentNode<A, B>) {
+    private switchNode(anchor: Node, newNode: CurrentNode<A, B> | undefined) {
         this.currentNode?.deactivate();
         this.currentNode?.unmount();
-        newNode.mount(anchor.parentNode!);
-        newNode.activate();
         this.currentNode = newNode;
+
+        if (newNode === undefined) return;
+
+        newNode.mount(anchor.parentNode!);
+        anchor.parentNode?.insertBefore(newNode, anchor.nextSibling);
+        newNode.activate();
     }
 }
