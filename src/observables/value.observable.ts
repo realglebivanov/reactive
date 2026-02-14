@@ -34,17 +34,17 @@ class ValueObservable<T> implements Observable<T>, Updatable<T> {
         this.opts.microtaskRunner(this.notifyAll.bind(this));
     }
 
+    private notifyAll() {
+        for (const [id, observer] of this.observers.entries()) 
+            this.notify(id, observer);
+    }
+
     private notify(id: symbol, observer: Observer<T>) {
         try {
             if (this.observers.get(id) === observer) observer(this.value);
         } catch (e) {
             console.error(e);
         }
-    };
-
-    private notifyAll() {
-        for (const [id, observer] of this.observers.entries())
-            this.notify(id, observer);
-    };
+    }
 }
 

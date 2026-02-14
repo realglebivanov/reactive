@@ -1,5 +1,5 @@
 import { buildLifecycleHooks, type Lifecycle } from './lifecycle';
-import type { Observable } from '../observables';
+import { inputObservable, type Observable, type Updatable } from '../observables';
 
 export type ReactiveNode<T extends Node> = Lifecycle & T & ReactiveNodeSetters<T>;
 
@@ -22,6 +22,14 @@ export interface TagReactiveNodeSetters<K extends keyof HTMLElementTagNameMap> {
     att: (name: string, value: string) => TagReactiveNode<K>;
     class$: (value: Observable<string>) => TagReactiveNode<K>;
     att$: (name: string, value: Observable<string>) => TagReactiveNode<K>;
+    prop$: <N extends keyof HTMLElementTagNameMap[K]>(
+        name: N,
+        value: Observable<HTMLElementTagNameMap[K][N]>
+    ) => TagReactiveNode<K>;
+    model$: <I extends 'input' | 'textarea' | 'select'>(
+        this: TagReactiveNode<I>,
+        value$: Observable<string> & Updatable<string>
+    ) => TagReactiveNode<I>;
 }
 
 export const toTagReactiveNode = <K extends keyof HTMLElementTagNameMap>(
@@ -69,6 +77,33 @@ const buildTagNodeSetters = <K extends keyof HTMLElementTagNameMap>(
             activate: () => value$.subscribeInit(
                 subscriberId,
                 (value: string) => this.setAttribute(name, value)),
+            deactivate: () => value$.unsubscribe(subscriberId),
+            unmount: () => undefined
+        });
+
+        return this;
+    },
+    model$: function<I extends 'input' | 'textarea' | 'select'>(
+        this: TagReactiveNode<I>,
+        value$: Observable<string> & Updatable<string>
+    ) {
+        const input$ = inputObservable(this, value$);
+        return this
+            .prop$('value', input$)
+            .listen('input', (_e) => input$.update((_) => this.value));
+    },
+    prop$: function <N extends keyof HTMLElementTagNameMap[K]>(
+        this: TagReactiveNode<K>,
+        name: N,
+        value$: Observable<HTMLElementTagNameMap[K][N]>
+    ) {
+        const subscriberId = Symbol(`Property: ${name.toString()}`)
+
+        handlers.push({
+            mount: (_: Node) => undefined,
+            activate: () => value$.subscribeInit(
+                subscriberId,
+                (value) => (this as HTMLElementTagNameMap[K])[name] = value),
             deactivate: () => value$.unsubscribe(subscriberId),
             unmount: () => undefined
         });

@@ -7,7 +7,9 @@ import {
     mapObservable,
     router,
     tags,
-    dedupObservable
+    dedupObservable,
+    tag,
+    once
 } from ".";
 
 import { ReactiveArray } from ".";
@@ -38,7 +40,7 @@ const counter = () => component({
         imageSource$: mapObservable(
             (hard) => hard ? "KashaHard.gif" : "Kasha.png",
             dedupObservable(hard$)),
-        hexCounter$: mapObservable((x) => x.toString(2), count$)
+        hexCounter$: mapObservable((x) => x.toString(16), count$)
     }),
     render: function ({ count$, hard$, veryHard$, imageSource$, hexCounter$ }) {
         const onClick = () => {
@@ -60,22 +62,27 @@ const counter = () => component({
 });
 
 const shoppingForm = () => component({
-    render: () => div(
-        div(span('Name: '), input('text').att('id', 'itemName').class$(observable(''))),
-        div(span('Price: '), input('text').att('id', 'itemPrice')),
-        button(span('Add')).clk(() => {
-            const itemName = document.getElementById('itemName') as HTMLInputElement;
-            const itemPrice = document.getElementById('itemPrice') as HTMLInputElement;
-
-            if (itemName.value == "" || itemPrice.value == "") return;
-
-            shoppingItems.push({
-                name: itemName.value,
-                price$: observable(itemPrice.value)
-            });
-
-            itemName.value = "";
-            itemPrice.value = "";
+    observables: () => ({
+        name$: observable(''),
+        price$: observable(''),
+    }),
+    derivedObservables: ({ name$, price$ }) => ({
+        formInvalid$:
+            mapObservable((name, price) => !!!name || !!!price, name$, price$)
+    }),
+    render: ({ name$, price$, formInvalid$ }) => div(
+        cond({
+            if$: formInvalid$,
+            otherwise: () => div(tag('h4', template`Pending item: ${name$} : ${price$}`))
+        }),
+        div(span('Name: '), input('text').att('id', 'itemName').model$(name$)),
+        div(span('Price: '), input('text').att('id', 'itemPrice').model$(price$)),
+        button(span('Add')).prop$('disabled', formInvalid$).clk(() => {
+            once((name, price) => {
+                shoppingItems.push({ name, price$: observable(price) });
+                name$.update((_) => "");
+                price$.update((_) => "");
+            }, name$, price$);
         })
     )
 });
@@ -96,7 +103,7 @@ const shoppingList = () => component({
 
 const exampleRouter = router({
     "/": div(
-        h1("Grecha.js"),
+        h1("Reactive"),
         div(a("Foo").att("href", "#/foo")),
         div(a("Bar").att("href", "#/bar")),
         counter(),
