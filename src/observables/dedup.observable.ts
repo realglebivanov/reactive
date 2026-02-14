@@ -38,6 +38,8 @@ class DedupObservable<T> implements Observable<T> {
 
     subscribeInit(id: symbol, observer: Observer<T>) {
         this.subscribe(id, observer);
+        if (this.observers.size === 1 || !this.isInitialized) return;
+        observer(this.currentValue as T);
     }
 
     private innerSubscribe() {
