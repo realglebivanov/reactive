@@ -43,12 +43,18 @@ class MapObservable<Observables extends readonly Observable<any>[], R> implement
     }
 
     subscribe(id: symbol, observer: Observer<R>) {
+        if (this.observers.has(id))
+            return console.warn(`Duplicate observer id ${id.toString()}`);
         this.observers.set(id, observer);
         this.innerSubscribe();
     }
 
     subscribeInit(id: symbol, observer: Observer<R>) {
         this.subscribe(id, observer);
+        if (this.initializedIndices.size !== this.ids.length) return;
+        if (this.observers.size == 1) return;
+        const mappedValue = this.mapFn(...this.currentValues as Values<Observables>);
+        observer(mappedValue);
     }
 
     private notifyObservers(i: keyof Observables) {
@@ -56,25 +62,26 @@ class MapObservable<Observables extends readonly Observable<any>[], R> implement
             this.currentValues[i] = newValue;
             this.initializedIndices.add(i);
 
-            if (this.initializedIndices.size === this.currentValues.length)
-                for (const observer of this.observers.values())
-                    observer(this.mapFn(...this.currentValues as Values<Observables>));
+            if (this.initializedIndices.size !== this.ids.length) return;
+
+            const mappedValue = this.mapFn(...this.currentValues as Values<Observables>);
+            for (const observer of this.observers.values()) observer(mappedValue);
         };
     }
 
     private innerSubscribe() {
         if (this.observers.size !== 1) return;
-        for (const [i, observable] of this.observables.entries()) {
+        for (const [i, observable] of this.observables.entries())
             observable.subscribeInit(
                 this.ids[i as keyof Observables],
                 this.notifyObservers(i));
-        }
-    };
+    }
 
     private innerUnubscribe() {
         if (this.observers.size !== 0) return;
         for (const [i, observable] of this.observables.entries()) {
             observable.unsubscribe(this.ids[i as keyof Observables]);
         }
-    };
+        this.initializedIndices.clear();
+    }
 }
