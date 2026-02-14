@@ -1,3 +1,5 @@
+import { mapObservable } from "./map.observable";
+
 export type Observer<T> = (value: T) => void;
 export type UpdateFn<T> = (value: T) => T;
 
@@ -12,7 +14,19 @@ export interface Updatable<T> {
     update(updateFn: UpdateFn<T>): void;
 }
 
+export const once = <T extends any[]>(
+    fn: (...values: T) => void, 
+    ...observables: { [K in keyof T]: Observable<T[K]> }) => {
+    const id = Symbol('Once');
+    const observable = mapObservable((...values) => values, ...observables);
+    observable.subscribeInit(id, (values: T) => {
+        observable.unsubscribe(id);
+        fn(...values);
+    });
+}
+
 export * from "./value.observable";
 export * from "./map.observable";
 export * from "./dedup.observable";
 export * from "./scoped.observable";
+export * from "./input.observable";
