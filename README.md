@@ -15,9 +15,9 @@ import {
     dedupObservable,
     tag,
     once
-} from "@realglebivanov/reactive";
+} from ".";
 
-import { ReactiveArray } from "@realglebivanov/reactive";
+import { ReactiveArray } from ".";
 
 const LOREM = `
       Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
