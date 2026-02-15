@@ -1,4 +1,4 @@
-import type { Observable } from "../observables";
+import { type Observable } from "../observables";
 import { toReactiveNode } from "../reactive/extensions";
 
 type PartialTextNode = {

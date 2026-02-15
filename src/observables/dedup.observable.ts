@@ -1,4 +1,6 @@
 import type { Observable, Observer } from ".";
+import { Notifier } from "./notifier";
+import { scheduler, type Schedulable } from "./scheduler";
 
 export const dedupObservable = <T>(
     innerObservable: Observable<T>,
@@ -8,12 +10,13 @@ export const dedupObservable = <T>(
 
 type CompareEqualFn<T> = (a: T, b: T) => boolean;
 type CloneFn<T> = (a: T) => T;
+type State<T> = { initialized: false } | { initialized: true, value: T };
 
-class DedupObservable<T> implements Observable<T> {
+class DedupObservable<T> implements Observable<T>, Schedulable {
     private id = Symbol('DedupObservable');
-    private currentValue: T | undefined = undefined;
-    private isInitialized = false;
-    private observers = new Map();
+    private state: State<T> = { initialized: false };
+    private boundUpdate = this.updateValue.bind(this);
+    private notifier = new Notifier<T>();
 
     constructor(
         private innerObservable: Observable<T>,
@@ -22,46 +25,53 @@ class DedupObservable<T> implements Observable<T> {
     ) { }
 
     unsubscribeAll() {
-        this.observers.clear();
+        this.notifier.clear();
         this.innerUnubscribe();
     }
 
     unsubscribe(id: symbol) {
-        this.observers.delete(id);
+        this.notifier.delete(id);
         this.innerUnubscribe();
     }
 
     subscribe(id: symbol, observer: Observer<T>) {
-        this.observers.set(id, observer);
+        this.notifier.set(id, observer);
         this.innerSubscribe();
     }
 
     subscribeInit(id: symbol, observer: Observer<T>) {
         this.subscribe(id, observer);
-        if (this.observers.size === 1 || !this.isInitialized) return;
-        observer(this.currentValue as T);
+        this.notifier.scheduleNotify(id);
+        scheduler.enqueueSubscription(this);
+    }
+
+    run(): void {
+        if (!this.state.initialized) return;
+        this.notifier.notifyTargets(this.state.value);
+        this.notifier.resetTargets();
     }
 
     private innerSubscribe() {
-        if (this.observers.size !== 1) return;
-        this.innerObservable.subscribeInit(
-            this.id, this.updateValue.bind(this));
+        if (this.notifier.size !== 1) return;
+        this.innerObservable.subscribeInit(this.id, this.boundUpdate);
     };
 
     private updateValue(value: T) {
-        if (this.isInitialized && this.compareEqualFn(this.currentValue as T, value)) 
+        if (this.state.initialized && this.compareEqualFn(this.state.value, value))
             return;
 
-        this.currentValue = this.cloneFn(value), this.isInitialized = true;
-
-        for (const observer of this.observers.values())
-            observer(this.currentValue);
+        if (this.state.initialized)
+            this.state.value = this.cloneFn(value);
+        else
+            this.state = { initialized: true, value: this.cloneFn(value) };
+        
+        this.notifier.scheduleNotifyAll();
+        scheduler.enqueueUpdate(this);
     }
 
     private innerUnubscribe() {
-        if (this.observers.size !== 0) return;
-        this.currentValue = undefined;
-        this.isInitialized = false;
+        if (this.notifier.size !== 0) return;
+        this.state = { initialized: false };
         this.innerObservable.unsubscribe(this.id);
-    };
+    }
 }

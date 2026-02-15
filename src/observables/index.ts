@@ -14,6 +14,13 @@ export interface Updatable<T> {
     update(updateFn: UpdateFn<T>): void;
 }
 
+export type ObservableValue<O extends Observable<any>> =
+    O extends Observable<infer T> ? T : never;
+
+export type Values<
+    Observables extends readonly Observable<any>[]
+> = { [K in keyof Observables]: ObservableValue<Observables[K]> };
+
 export const once = <T extends any[]>(
     fn: (...values: T) => void, 
     ...observables: { [K in keyof T]: Observable<T[K]> }) => {
@@ -23,7 +30,7 @@ export const once = <T extends any[]>(
         observable.unsubscribe(id);
         fn(...values);
     });
-}
+};
 
 export * from "./value.observable";
 export * from "./map.observable";

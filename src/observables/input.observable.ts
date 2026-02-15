@@ -10,7 +10,7 @@ export const inputObservable = <I extends 'input' | 'textarea' | 'select'>(
 export class InputObservable<
     I extends 'input' | 'textarea' | 'select'
 > implements Observable<string>, Updatable<string> {
-    private aliases = new Map<symbol, [symbol, Observer<string>]>();
+    private aliases = new Map<symbol, symbol>();
 
     constructor(
         private input: TagReactiveNode<I>,
@@ -20,26 +20,26 @@ export class InputObservable<
     subscribe(id: symbol, observer: Observer<string>): void {
         if (this.aliases.has(id)) return;
         const alias = Symbol('InputObservable');
-        this.aliases.set(id, [alias, observer]);
+        this.aliases.set(id, alias);
         this.value$.subscribe(alias, this.toInputObserver(observer));
     }
 
     subscribeInit(id: symbol, observer: Observer<string>): void {
         if (this.aliases.has(id)) return;
         const alias = Symbol('InputObservable');
-        this.aliases.set(id, [alias, observer]);
+        this.aliases.set(id, alias);
         this.value$.subscribeInit(alias, this.toInputObserver(observer));
     }
 
     unsubscribe(id: symbol): void {
-        const value = this.aliases.get(id);
-        if (value === undefined) return;
-        this.value$.unsubscribe(value[0]);
+        const alias = this.aliases.get(id);
+        if (alias === undefined) return;
+        this.value$.unsubscribe(alias);
         this.aliases.delete(id);
     }
 
     unsubscribeAll(): void {
-        for (const [alias, _] of this.aliases.values())
+        for (const alias of this.aliases.values())
             this.value$.unsubscribe(alias);
         this.aliases.clear();
     }
