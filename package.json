@@ -1,6 +1,6 @@
 {
   "name": "@realglebivanov/reactive",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "A simple and permissive observable-driven UI toolkit",
   "type": "module",
   "main": "./dist/index.js",
