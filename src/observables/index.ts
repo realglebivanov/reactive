@@ -23,7 +23,7 @@ export type Values<
 
 export const once = <T extends any[]>(
     fn: (...values: T) => void, 
-    ...observables: { [K in keyof T]: Observable<T[K]> }) => {
+    ...observables: { [K in keyof T]: Observable<T[K]> }): void => {
     const id = Symbol('Once');
     const observable = mapObservable((...values) => values, ...observables);
     observable.subscribeInit(id, (values: T) => {

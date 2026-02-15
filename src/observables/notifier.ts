@@ -9,36 +9,36 @@ export class Notifier<T> {
         return this.observers.size;
     }
 
-    scheduleNotify(id: symbol) {
+    scheduleNotify(id: symbol): void {
         if (!this.notifyAll)
             this.notifySchedule.add(id);
     }
 
-    scheduleNotifyAll() {
+    scheduleNotifyAll(): void {
         this.notifySchedule.clear();
         this.notifyAll = true;
     }
 
-    clearSchedule() {
+    clearSchedule(): void {
         this.notifyAll = false;
         this.notifySchedule.clear();
     }
 
-    clear() {
+    clear(): void {
         this.observers.clear();
     }
 
-    set(id: symbol, observer: Observer<T>) {
+    set(id: symbol, observer: Observer<T>): void {
         if (this.observers.has(id))
             console.warn("Duplicate observer id", id);
         this.observers.set(id, observer);
     }
 
-    delete(id: symbol) {
+    delete(id: symbol): void {
         this.observers.delete(id);
     }
 
-    notifyTargets(value: T) {
+    notifyTargets(value: T): void {
         if (this.notifyAll) {
             for (const observer of this.observers.values())
                 this.notify(observer, value);
@@ -49,7 +49,7 @@ export class Notifier<T> {
         }
     }
 
-    resetTargets() {
+    resetTargets(): void {
         this.notifyAll = false;
         this.notifySchedule.clear();
     }

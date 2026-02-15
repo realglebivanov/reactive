@@ -2,7 +2,7 @@
   // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
     // File Layout
-    "rootDir": "./src",
+    "rootDir": "./",
     "outDir": "./dist",
     "moduleResolution": "bundler",
 
@@ -17,6 +17,7 @@
     "sourceMap": true,
     "declaration": true,
     "declarationMap": true,
+    "isolatedDeclarations": true,
 
     // Stricter Typechecking Options
     "noUncheckedIndexedAccess": true,

@@ -1,7 +1,7 @@
 import type { Observable, Observer, Values } from "..";
 import { Notifier } from "../notifier";
 import { scheduler, type Schedulable } from "../scheduler";
-import { type State, UninitializedState } from "./state";
+import { type State, Uninitialized } from "./state";
 
 export const mapObservable = <
     Observables extends readonly Observable<any>[],
@@ -25,32 +25,32 @@ class MapObservable<
         private observables: Observables
     ) {
         this.ids = Array.from(this.observables, () => Symbol("MapObservable"));
-        this.state = new UninitializedState(this.ids.length)
+        this.state = new Uninitialized(this.ids.length)
     }
 
-    unsubscribeAll() {
+    unsubscribeAll(): void {
         this.notifier.clear();
         this.innerUnubscribe();
     }
 
-    unsubscribe(id: symbol) {
+    unsubscribe(id: symbol): void {
         this.notifier.delete(id);
         this.innerUnubscribe();
     }
 
-    subscribe(id: symbol, observer: Observer<R>) {
+    subscribe(id: symbol, observer: Observer<R>): void {
         this.notifier.set(id, observer);
         this.innerSubscribe();
     }
 
-    subscribeInit(id: symbol, observer: Observer<R>) {
+    subscribeInit(id: symbol, observer: Observer<R>): void {
         this.subscribe(id, observer);
         this.notifier.scheduleNotify(id);
         scheduler.enqueueSubscription(this);
     }
 
     run(): void {
-        if (this.state instanceof UninitializedState) return;
+        if (this.state instanceof Uninitialized) return;
         this.notifier.notifyTargets(this.mapFn(...this.state.values));
         this.notifier.resetTargets();
     }
@@ -58,7 +58,7 @@ class MapObservable<
     private notifyObservers(i: keyof Observables) {
         return (newValue: Values<Observables>[keyof Observables]) => {
             this.state = this.state.update(i, newValue);
-            if (this.state instanceof UninitializedState) return;
+            if (this.state instanceof Uninitialized) return;
             this.notifier.scheduleNotifyAll();
             scheduler.enqueueUpdate(this);
         };
@@ -77,6 +77,6 @@ class MapObservable<
             if (this.ids[i] !== undefined)
                 observable.unsubscribe(this.ids[i]);
         }
-        this.state = new UninitializedState(this.ids.length);
+        this.state = new Uninitialized(this.ids.length);
     }
 }

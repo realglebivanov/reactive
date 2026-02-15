@@ -136,5 +136,5 @@ function numberToHexColor(number: number) {
     return "#" + hex;
 }
 
-exampleRouter.mount(document.getElementById('entry')!);
+exampleRouter.mount(document.body);
 exampleRouter.activate();

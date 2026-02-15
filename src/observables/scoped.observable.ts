@@ -2,7 +2,7 @@ import type { Observable, Observer, Updatable, UpdateFn } from ".";
 
 export const scopedObservable = <T extends Observable<any>>(
     innerObservable: T
-) => new ScopedObservable<T>(innerObservable);
+): ScopedObservable<T> => new ScopedObservable<T>(innerObservable);
 
 type Value<O extends Observable<any>> =
     O extends Observable<infer T> ? T : never;
@@ -14,26 +14,26 @@ export class ScopedObservable<T extends Observable<any>> implements Observable<V
         private innerObservable: T
     ) { }
 
-    unsubscribeAll() {
+    unsubscribeAll(): void {
         for (const alias of this.aliases.values())
             this.innerObservable.unsubscribe(alias);
         this.aliases.clear();
     }
 
-    unsubscribe(id: symbol) {
+    unsubscribe(id: symbol): void {
         const alias = this.aliases.get(id);
         if (alias === undefined) return;
         this.aliases.delete(id);
         this.innerObservable.unsubscribe(alias);
     }
 
-    subscribe(id: symbol, observer: Observer<Value<T>>) {
+    subscribe(id: symbol, observer: Observer<Value<T>>): void {
         const alias = Symbol('ScopedObservable');
         this.aliases.set(id, alias);
         this.innerObservable.subscribe(alias, observer);
     }
 
-    subscribeInit(id: symbol, observer: Observer<Value<T>>) {
+    subscribeInit(id: symbol, observer: Observer<Value<T>>): void {
         const alias = Symbol('ScopedObservable');
         this.aliases.set(id, alias);
         this.innerObservable.subscribeInit(alias, observer);

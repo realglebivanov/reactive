@@ -4,7 +4,7 @@ import type { TagReactiveNode } from "../reactive";
 export const inputObservable = <I extends 'input' | 'textarea' | 'select'>(
     input: TagReactiveNode<I>,
     value$: Observable<string> & Updatable<string>
-) => new InputObservable<I>(input, value$);
+): InputObservable<I> => new InputObservable<I>(input, value$);
 
 
 export class InputObservable<

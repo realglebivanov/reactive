@@ -15,4 +15,4 @@ export const buildMicrotaskRunner = (): TaskRunner => {
     };
 };
 
-export const microtaskRunner = buildMicrotaskRunner();
+export const microtaskRunner: TaskRunner = buildMicrotaskRunner();

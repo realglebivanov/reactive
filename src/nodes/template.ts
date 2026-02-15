@@ -1,5 +1,5 @@
 import { type Observable } from "../observables";
-import { toReactiveNode } from "../reactive/extensions";
+import { toReactiveNode, type ReactiveNode } from "../reactive/extensions";
 
 type PartialTextNode = {
     staticNodes: Text[],
@@ -15,7 +15,7 @@ type Hole = Observable<string> | string;
 export const template = (
     strings: TemplateStringsArray,
     ...holes: Hole[]
-) => new Template(strings, holes).toReactiveNode();
+): ReactiveNode<Comment> => new Template(strings, holes).toReactiveNode();
 
 class Template {
     constructor(
@@ -23,7 +23,7 @@ class Template {
         private holes: Hole[]
     ) { }
 
-    toReactiveNode() {
+    toReactiveNode(): ReactiveNode<Comment> {
         const nodes = this.buildNodes();
         const commentNode = document.createComment('Template');
 

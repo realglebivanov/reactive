@@ -11,31 +11,31 @@ class ValueObservable<T> implements Observable<T>, Updatable<T>, Schedulable {
 
     constructor(private value: T) { }
 
-    unsubscribeAll() {
+    unsubscribeAll(): void {
         this.notifier.clear();
     }
 
-    unsubscribe(id: symbol) {
+    unsubscribe(id: symbol): void {
         this.notifier.delete(id);
     }
 
-    subscribe(id: symbol, observer: Observer<T>) {
+    subscribe(id: symbol, observer: Observer<T>): void {
         this.notifier.set(id, observer);
     }
 
-    subscribeInit(id: symbol, observer: Observer<T>) {
+    subscribeInit(id: symbol, observer: Observer<T>): void {
         this.notifier.set(id, observer);
         this.notifier.scheduleNotify(id);
         scheduler.enqueueSubscription(this);
     }
 
-    update(updateFn: UpdateFn<T>) {
+    update(updateFn: UpdateFn<T>): void {
         this.value = updateFn(this.value);
         this.notifier.scheduleNotifyAll();
         scheduler.enqueueUpdate(this);
     }
 
-    run() {
+    run(): void {
         this.notifier.notifyTargets(this.value);
         this.notifier.resetTargets();
     }

@@ -15,19 +15,19 @@ export class ReactiveItemCollection<K extends Key, T, N extends ReactiveNode<Nod
         private buildFn: BuildFn<N, T>,
     ) { }
 
-    deactivate() {
+    deactivate(): void {
         for (const item of this.items.values()) 
             item.deactivate();
     }
 
-    unmount() {
+    unmount(): void {
         for (const item of this.items.values())
             item.unmount();
         this.items.clear();
         this.generationId = 0;
     }
 
-    replace(anchor: Node, newItems: Collection<T>) {
+    replace(anchor: Node, newItems: Collection<T>): void {
         this.generationId++;
         let refItem = null;
 
@@ -41,7 +41,7 @@ export class ReactiveItemCollection<K extends Key, T, N extends ReactiveNode<Nod
         this.removeStaleItems();
     }
 
-    replaceKeys(anchor: Node, items: Collection<T>) {
+    replaceKeys(anchor: Node, items: Collection<T>): void {
         for (const [k, value] of items.entries()) {
             const key = this.keyFn(k, value);
             const refItem = this.items.get(key);
@@ -54,14 +54,14 @@ export class ReactiveItemCollection<K extends Key, T, N extends ReactiveNode<Nod
         }
     }
 
-    append(anchor: Node, newItems: Collection<T>) {
+    append(anchor: Node, newItems: Collection<T>): void {
         for (const [k, value] of newItems.entries()) {
             const key = this.keyFn(k, value);
             this.insertItem(anchor, null, key, value);
         }
     }
 
-    remove(items: Collection<T>) {
+    remove(items: Collection<T>): void {
         for (const [k, value] of items.entries()) {
             const key = this.keyFn(k, value);
             const item = this.items.get(key);

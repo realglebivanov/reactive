@@ -9,7 +9,7 @@ export class ReactiveItem<T, N extends ReactiveNode<Node>> {
         public node: N
     ) { }
 
-    mount(refItem: ReactiveItem<T, N> | null) {
+    mount(refItem: ReactiveItem<T, N> | null): void {
         const parentNode = this.anchor.parentNode;
         const insertBefore = refItem?.node.nextSibling || null;
 

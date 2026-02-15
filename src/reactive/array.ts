@@ -14,7 +14,7 @@ export class ReactiveArray<T> {
         return obs$;
     };
 
-    push(...items: T[]) {
+    push(...items: T[]): void {
         this.items.push(...items);
         this.emit({ type: "append", items: items })
     }
@@ -30,7 +30,7 @@ export class ReactiveArray<T> {
         return value;
     }
 
-    remove(indices: number[]) {
+    remove(indices: number[]): void {
         if (indices.length == 0) return;
         const eventItems = new Map();
         for (const idx of indices) {
@@ -41,12 +41,12 @@ export class ReactiveArray<T> {
         this.emit({ type: "remove", items: eventItems });
     }
 
-    replace(items: T[]) {
+    replace(items: T[]): void {
         this.items = items;
         this.emit({ type: "replace", items: items });
     }
 
-    replaceKeys(items: Map<number, T>) {
+    replaceKeys(items: Map<number, T>): void {
         for (const [idx, value] of items.entries()) {
             if (!(idx in this.items)) continue;
             this.items[idx] = value;

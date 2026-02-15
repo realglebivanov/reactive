@@ -8,17 +8,17 @@ export class RingQueue<T> {
         this.items = new Array(capacity);
     }
 
-    get isEmpty() {
+    get isEmpty(): boolean {
         return this.size === 0;
     }
 
-    clear() {
+    clear(): void {
         this.size = 0;
         this.tail = 0;
         this.head = 0;
     }
 
-    enqueue(item: T) {
+    enqueue(item: T): void {
         if (this.size === this.items.length) this.extend();
 
         this.items[this.tail] = item;

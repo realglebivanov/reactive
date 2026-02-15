@@ -6,7 +6,7 @@ export const dedupObservable = <T>(
     innerObservable: Observable<T>,
     compareEqualFn: CompareEqualFn<T> = (a, b) => a == b,
     cloneFn: CloneFn<T> = (a) => a
-) => new DedupObservable(innerObservable, compareEqualFn, cloneFn);
+): DedupObservable<T> => new DedupObservable(innerObservable, compareEqualFn, cloneFn);
 
 type CompareEqualFn<T> = (a: T, b: T) => boolean;
 type CloneFn<T> = (a: T) => T;
@@ -24,22 +24,22 @@ class DedupObservable<T> implements Observable<T>, Schedulable {
         private cloneFn: CloneFn<T>
     ) { }
 
-    unsubscribeAll() {
+    unsubscribeAll(): void {
         this.notifier.clear();
         this.innerUnubscribe();
     }
 
-    unsubscribe(id: symbol) {
+    unsubscribe(id: symbol): void {
         this.notifier.delete(id);
         this.innerUnubscribe();
     }
 
-    subscribe(id: symbol, observer: Observer<T>) {
+    subscribe(id: symbol, observer: Observer<T>): void {
         this.notifier.set(id, observer);
         this.innerSubscribe();
     }
 
-    subscribeInit(id: symbol, observer: Observer<T>) {
+    subscribeInit(id: symbol, observer: Observer<T>): void {
         this.subscribe(id, observer);
         this.notifier.scheduleNotify(id);
         scheduler.enqueueSubscription(this);

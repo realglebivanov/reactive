@@ -24,9 +24,11 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsup",
-    "watch": "tsup --watch",
-    "serve": "npx serve dist/",
+    "build": "bunup --filter dist",
+    "watch": "bunup --watch --filter dist",
+    "demo:build": "bunup --filter demo",
+    "demo:watch": "bunup --watch --filter demo",
+    "demo:serve": "bun x serve demo/",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -40,7 +42,7 @@
   },
   "homepage": "https://github.com/realglebivanov/reactive#readme",
   "devDependencies": {
-    "tsup": "^8.5.1",
+    "bunup": "^0.16.26",
     "typescript": "^5.9.3"
   },
   "files": [
