@@ -42,7 +42,7 @@ class DedupObservable<T> implements Observable<T>, Schedulable {
     subscribeInit(id: symbol, observer: Observer<T>): void {
         this.subscribe(id, observer);
         this.notifier.scheduleNotify(id);
-        scheduler.enqueueSubscription(this);
+        scheduler.enqueueInit(this);
     }
 
     run(): void {

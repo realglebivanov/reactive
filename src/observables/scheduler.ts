@@ -4,8 +4,8 @@ export interface Schedulable {
     run(): void;
 }
 
-export type Scheduler = {
-    enqueueSubscription: (task: Schedulable) => void;
+export type SchedulerApi = {
+    enqueueInit: (task: Schedulable) => void;
     enqueueUpdate: (task: Schedulable) => void;
 }
 
@@ -14,48 +14,42 @@ enum Status {
     Idle
 }
 
-const buildScheduleFun = () => {
-    const flushIds: WeakMap<Schedulable, number> = new WeakMap();
+class Scheduler {
+    private readonly flushIds: WeakMap<Schedulable, number> = new WeakMap();
+    private readonly tasks: RingQueue<Schedulable> = new RingQueue();
+    private flushId = 0;
+    private status = Status.Idle;
 
-    let flushId = 0;
-    let status = Status.Idle;
+    schedule(task: Schedulable): void {
+        if (this.flushIds.get(task) === this.flushId) return;
 
-    let tasks: RingQueue<Schedulable> = new RingQueue();
-    let nextTasks: RingQueue<Schedulable> = new RingQueue();
+        this.flushIds.set(task, this.flushId);
+        this.tasks.enqueue(task);
 
-    const runner = () => {
-        while (true) {
-            [tasks, nextTasks] = [nextTasks, tasks];
-            nextTasks.clear();
+        this.enqueueMicrotask();
+    }
 
-            let task: Schedulable | undefined;
-            while (task = tasks.dequeue()) task.run();
+    private enqueueMicrotask() {
+        if (this.status === Status.Scheduled) return;
+        this.status = Status.Scheduled;
+        queueMicrotask(() => {
+            this.flushTasks();
+            this.status = Status.Idle;
+            this.flushId++;
+        });
+    }
 
-            if (nextTasks.isEmpty) break;
-        }
-    };
+    private flushTasks() {
+        let task: Schedulable | undefined;
+        while (task = this.tasks.dequeue()) 
+            task.run();
+    }
+}
 
-    const enqueueMicrotask = () => queueMicrotask(() => {
-        runner();
-        status = Status.Idle;
-        flushId++;
-    });
+const initScheduler = new Scheduler();
+const updateScheduler = new Scheduler();
 
-    return (task: Schedulable) => {
-        const taskFlushId = flushIds.get(task);
-        if (taskFlushId === flushId) return;
-
-        flushIds.set(task, flushId);
-        nextTasks.enqueue(task);
-
-        if (status === Status.Scheduled) return;
-
-        status = Status.Scheduled;
-        enqueueMicrotask();
-    };
-};
-
-export const scheduler: Scheduler = {
-    enqueueSubscription: buildScheduleFun(),
-    enqueueUpdate: buildScheduleFun()
+export const scheduler: SchedulerApi = {
+    enqueueInit: (task: Schedulable) => initScheduler.schedule(task),
+    enqueueUpdate: (task: Schedulable) => updateScheduler.schedule(task),
 };

@@ -26,7 +26,7 @@ class ValueObservable<T> implements Observable<T>, Updatable<T>, Schedulable {
     subscribeInit(id: symbol, observer: Observer<T>): void {
         this.notifier.set(id, observer);
         this.notifier.scheduleNotify(id);
-        scheduler.enqueueSubscription(this);
+        scheduler.enqueueInit(this);
     }
 
     update(updateFn: UpdateFn<T>): void {

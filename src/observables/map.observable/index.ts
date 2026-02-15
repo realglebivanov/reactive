@@ -46,7 +46,7 @@ class MapObservable<
     subscribeInit(id: symbol, observer: Observer<R>): void {
         this.subscribe(id, observer);
         this.notifier.scheduleNotify(id);
-        scheduler.enqueueSubscription(this);
+        scheduler.enqueueInit(this);
     }
 
     run(): void {
