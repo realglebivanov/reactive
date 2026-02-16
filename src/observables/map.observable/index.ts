@@ -17,7 +17,7 @@ class MapObservable<
     R
 > implements Observable<R>, Schedulable {
     private notifier = new Notifier<R>();
-    private state: State<Observables>;
+    private state: State<Observables, R>;
     private ids: symbol[];
 
     constructor(
@@ -25,7 +25,7 @@ class MapObservable<
         private observables: Observables
     ) {
         this.ids = Array.from(this.observables, () => Symbol("MapObservable"));
-        this.state = new Uninitialized(this.ids.length)
+        this.state = new Uninitialized(this.ids.length, mapFn)
     }
 
     unsubscribeAll(): void {
@@ -51,7 +51,7 @@ class MapObservable<
 
     run(): void {
         if (this.state instanceof Uninitialized) return;
-        this.notifier.notifyTargets(this.mapFn(...this.state.values));
+        this.notifier.notifyTargets(this.state.value);
         this.notifier.resetTargets();
     }
 
@@ -77,6 +77,6 @@ class MapObservable<
             if (this.ids[i] !== undefined)
                 observable.unsubscribe(this.ids[i]);
         }
-        this.state = new Uninitialized(this.ids.length);
+        this.state = new Uninitialized(this.ids.length, this.mapFn);
     }
 }
