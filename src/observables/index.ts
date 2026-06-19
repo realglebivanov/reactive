@@ -4,6 +4,12 @@ export type Observer<T> = (value: T) => void;
 export type UpdateFn<T> = (value: T) => T;
 
 export interface Observable<T> {
+    /**
+     * Position in the dependency graph: sources are 0, a derived observable is
+     * `1 + max(depth of its inputs)`. The scheduler drains tasks in ascending
+     * depth order so a node never runs before the inputs it is derived from.
+     */
+    readonly depth: number;
     unsubscribeAll(): void;
     unsubscribe(id: symbol): void;
     subscribe(id: symbol, observer: Observer<T>): void;

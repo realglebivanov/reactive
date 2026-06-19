@@ -1,6 +1,5 @@
-import { RingQueue } from "../ring.queue";
-
 export interface Schedulable {
+    readonly depth: number;
     run(): void;
 }
 
@@ -16,7 +15,11 @@ enum Status {
 
 class Scheduler {
     private readonly flushIds: WeakMap<Schedulable, number> = new WeakMap();
-    private readonly tasks: RingQueue<Schedulable> = new RingQueue();
+    // One bucket per depth. Order *within* a bucket is irrelevant: two nodes at
+    // the same depth can never depend on each other (an edge always increases
+    // depth), so a bucket is drained as a plain stack rather than a FIFO queue.
+    private readonly buckets: Schedulable[][] = [];
+    private size = 0;
     private flushId = 0;
     private status = Status.Idle;
 
@@ -24,7 +27,12 @@ class Scheduler {
         if (this.flushIds.get(task) === this.flushId) return;
 
         this.flushIds.set(task, this.flushId);
-        this.tasks.enqueue(task);
+
+        const depth = task.depth;
+        let bucket = this.buckets[depth];
+        if (bucket === undefined) bucket = this.buckets[depth] = [];
+        bucket.push(task);
+        this.size++;
 
         this.enqueueMicrotask();
     }
@@ -41,8 +49,20 @@ class Scheduler {
 
     private flushTasks() {
         let task: Schedulable | undefined;
-        while (task = this.tasks.dequeue()) 
+        while (task = this.dequeue())
             task.run();
+    }
+
+    private dequeue(): Schedulable | undefined {
+        if (this.size === 0) return undefined;
+
+        for (const bucket of this.buckets) {
+            if (bucket === undefined || bucket.length === 0) continue;
+            this.size--;
+            return bucket.pop();
+        }
+
+        return undefined;
     }
 }
 

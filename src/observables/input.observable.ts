@@ -17,6 +17,10 @@ export class InputObservable<
         private value$: Observable<string> & Updatable<string>
     ) { }
 
+    get depth(): number {
+        return this.value$.depth;
+    }
+
     subscribe(id: symbol, observer: Observer<string>): void {
         if (this.aliases.has(id)) return;
         const alias = Symbol('InputObservable');

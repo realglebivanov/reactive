@@ -4,7 +4,7 @@ export type TaskRunner = (task: Task) => void;
 export const buildMicrotaskRunner = (): TaskRunner => {
     const tasks: Task[] = [];
     const enqueue = () => queueMicrotask(() => {
-        const run = tasks.toReversed();
+        const run = Array.from(tasks);
         tasks.length = 0;
         for (const task of run) task();
     });

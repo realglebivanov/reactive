@@ -13,6 +13,7 @@ type CloneFn<T> = (a: T) => T;
 type State<T> = { initialized: false } | { initialized: true, value: T };
 
 class DedupObservable<T> implements Observable<T>, Schedulable {
+    readonly depth: number;
     private id = Symbol('DedupObservable');
     private state: State<T> = { initialized: false };
     private boundUpdate = this.updateValue.bind(this);
@@ -22,7 +23,9 @@ class DedupObservable<T> implements Observable<T>, Schedulable {
         private innerObservable: Observable<T>,
         private compareEqualFn: CompareEqualFn<T>,
         private cloneFn: CloneFn<T>
-    ) { }
+    ) {
+        this.depth = 1 + innerObservable.depth;
+    }
 
     unsubscribeAll(): void {
         this.notifier.clear();

@@ -16,6 +16,7 @@ class MapObservable<
     Observables extends readonly Observable<any>[],
     R
 > implements Observable<R>, Schedulable {
+    readonly depth: number;
     private notifier = new Notifier<R>();
     private state: State<Observables, R>;
     private ids: symbol[];
@@ -26,6 +27,8 @@ class MapObservable<
     ) {
         this.ids = Array.from(this.observables, () => Symbol("MapObservable"));
         this.state = new Uninitialized(this.ids.length, mapFn)
+        this.depth = 1 + this.observables.reduce(
+            (max, observable) => Math.max(max, observable.depth), 0);
     }
 
     unsubscribeAll(): void {

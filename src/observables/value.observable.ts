@@ -7,6 +7,7 @@ export const observable = <T>(
 ): ValueObservable<T> => new ValueObservable(value);
 
 class ValueObservable<T> implements Observable<T>, Updatable<T>, Schedulable {
+    readonly depth = 0;
     private readonly notifier = new Notifier<T>();
 
     constructor(private value: T) { }

@@ -14,6 +14,10 @@ export class ScopedObservable<T extends Observable<any>> implements Observable<V
         private innerObservable: T
     ) { }
 
+    get depth(): number {
+        return this.innerObservable.depth;
+    }
+
     unsubscribeAll(): void {
         for (const alias of this.aliases.values())
             this.innerObservable.unsubscribe(alias);
