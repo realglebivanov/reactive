@@ -9,21 +9,26 @@ type PartialArray<V extends readonly any[]> = {
 
 export class Initialized<O extends readonly Observable<any>[], R> {
     private currentValue: R;
+    private dirty = false;
 
     constructor(
-        private values: Values<O>, 
+        private values: Values<O>,
         private mapFn: (...values: Values<O>) => R
     ) {
         this.currentValue = mapFn(...values);
     }
 
     get value(): R {
+        if (this.dirty) {
+            this.currentValue = this.mapFn(...this.values);
+            this.dirty = false;
+        }
         return this.currentValue;
     }
 
     public update<K extends keyof O>(i: K, value: Values<O>[K]): Initialized<O, R> {
         this.values[i] = value;
-        this.currentValue = this.mapFn(...this.values);
+        this.dirty = true;
         return this;
     }
 }
